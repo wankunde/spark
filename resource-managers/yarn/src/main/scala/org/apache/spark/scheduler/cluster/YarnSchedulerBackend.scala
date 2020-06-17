@@ -144,6 +144,7 @@ private[spark] abstract class YarnSchedulerBackend(
    * Request that the ApplicationMaster kill the specified executors.
    */
   override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = {
+    executorIds.foreach(sc.env.blockManager.master.removeExecutor)
     yarnSchedulerEndpointRef.ask[Boolean](KillExecutors(executorIds))
   }
 

@@ -23,7 +23,6 @@ import java.util.UUID
 import scala.collection.JavaConverters.seqAsJavaListConverter
 
 import org.apache.commons.lang3.exception.ExceptionUtils
-import org.apache.hadoop.hive.ql.security.authorization.plugin.{HiveOperationType, HivePrivilegeObjectUtils}
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.GetFunctionsOperation
 import org.apache.hive.service.cli.operation.MetadataOperation.DEFAULT_HIVE_CATALOG
@@ -68,12 +67,6 @@ private[hive] class SparkGetFunctionsOperation(
     val matchingDbs = catalog.listDatabases(schemaPattern)
     val functionPattern = CLIServiceUtils.patternToRegex(functionName)
 
-    if (isAuthV2Enabled) {
-      // authorize this call on the schema objects
-      val privObjs =
-        HivePrivilegeObjectUtils.getHivePrivDbObjects(seqAsJavaListConverter(matchingDbs).asJava)
-      authorizeMetaGets(HiveOperationType.GET_FUNCTIONS, privObjs, cmdStr)
-    }
 
     HiveThriftServer2.eventManager.onStatementStart(
       statementId,

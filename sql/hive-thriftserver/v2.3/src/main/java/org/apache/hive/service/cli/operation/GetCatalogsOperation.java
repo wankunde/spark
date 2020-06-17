@@ -47,9 +47,6 @@ public class GetCatalogsOperation extends MetadataOperation {
   public void runInternal() throws HiveSQLException {
     setState(OperationState.RUNNING);
     try {
-      if (isAuthV2Enabled()) {
-        authorizeMetaGets(HiveOperationType.GET_CATALOGS, null);
-      }
       setState(OperationState.FINISHED);
     } catch (HiveSQLException e) {
       setState(OperationState.ERROR);

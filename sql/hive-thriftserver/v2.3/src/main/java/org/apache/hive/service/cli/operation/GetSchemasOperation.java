@@ -54,10 +54,6 @@ public class GetSchemasOperation extends MetadataOperation {
   @Override
   public void runInternal() throws HiveSQLException {
     setState(OperationState.RUNNING);
-    if (isAuthV2Enabled()) {
-      String cmdStr = "catalog : " + catalogName + ", schemaPattern : " + schemaName;
-      authorizeMetaGets(HiveOperationType.GET_SCHEMAS, null, cmdStr);
-    }
     try {
       IMetaStoreClient metastoreClient = getParentSession().getMetaStoreClient();
       String schemaPattern = convertSchemaPattern(schemaName);

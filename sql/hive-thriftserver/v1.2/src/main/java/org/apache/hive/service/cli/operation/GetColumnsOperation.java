@@ -29,7 +29,6 @@ import java.util.regex.Pattern;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveOperationType;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject.HivePrivilegeObjectType;
 import org.apache.hive.service.cli.ColumnDescriptor;
@@ -142,13 +141,6 @@ public class GetColumnsOperation extends MetadataOperation {
         List<String> tableNames = metastoreClient.getTables(dbName, tablePattern);
         Collections.sort(tableNames);
         db2Tabs.put(dbName, tableNames);
-      }
-
-      if (isAuthV2Enabled()) {
-        List<HivePrivilegeObject> privObjs = getPrivObjs(db2Tabs);
-        String cmdStr = "catalog : " + catalogName + ", schemaPattern : " + schemaName
-            + ", tablePattern : " + tableName;
-        authorizeMetaGets(HiveOperationType.GET_COLUMNS, privObjs, cmdStr);
       }
 
       for (Entry<String, List<String>> dbTabs : db2Tabs.entrySet()) {

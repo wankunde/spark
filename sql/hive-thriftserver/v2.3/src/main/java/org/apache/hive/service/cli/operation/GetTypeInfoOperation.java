@@ -83,9 +83,6 @@ public class GetTypeInfoOperation extends MetadataOperation {
   @Override
   public void runInternal() throws HiveSQLException {
     setState(OperationState.RUNNING);
-    if (isAuthV2Enabled()) {
-      authorizeMetaGets(HiveOperationType.GET_TYPEINFO, null);
-    }
     try {
       for (Type type : Type.values()) {
         Object[] rowData = new Object[] {

@@ -23,7 +23,7 @@ import java.util.regex.Pattern
 import scala.collection.JavaConverters.seqAsJavaListConverter
 
 import org.apache.commons.lang3.exception.ExceptionUtils
-import org.apache.hadoop.hive.ql.security.authorization.plugin.{HiveOperationType, HivePrivilegeObject}
+import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject.HivePrivilegeObjectType
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.GetColumnsOperation
@@ -90,10 +90,6 @@ private[hive] class SparkGetColumnsOperation(
       (dbName, catalog.listTables(dbName, tablePattern, includeLocalTempViews = false))
     }.toMap
 
-    if (isAuthV2Enabled) {
-      val privObjs = seqAsJavaListConverter(getPrivObjs(db2Tabs)).asJava
-      authorizeMetaGets(HiveOperationType.GET_COLUMNS, privObjs, cmdStr)
-    }
 
     try {
       // Tables and views

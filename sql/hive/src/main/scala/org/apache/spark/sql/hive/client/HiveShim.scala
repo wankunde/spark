@@ -1010,8 +1010,7 @@ private[client] class Shim_v1_2 extends Shim_v1_1 {
       JInteger.TYPE,
       JBoolean.TYPE,
       JBoolean.TYPE,
-      JBoolean.TYPE,
-      JLong.TYPE)
+      JBoolean.TYPE)
 
   private lazy val dropOptionsClass =
       Utils.classForName("org.apache.hadoop.hive.metastore.PartitionDropOptions")
@@ -1035,8 +1034,7 @@ private[client] class Shim_v1_2 extends Shim_v1_1 {
       numDP: Int,
       listBucketingEnabled: Boolean): Unit = {
     loadDynamicPartitionsMethod.invoke(hive, loadPath, tableName, partSpec, replace: JBoolean,
-      numDP: JInteger, holdDDLTime, listBucketingEnabled: JBoolean, isAcid,
-      txnIdInLoadDynamicPartitions)
+      numDP: JInteger, holdDDLTime, listBucketingEnabled: JBoolean, isAcid)
   }
 
   override def dropPartition(

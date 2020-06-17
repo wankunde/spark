@@ -292,20 +292,6 @@ private[spark] class Client(
         appContext.setResource(capability)
     }
 
-    sparkConf.get(ROLLED_LOG_INCLUDE_PATTERN).foreach { includePattern =>
-      try {
-        val logAggregationContext = Records.newRecord(classOf[LogAggregationContext])
-        logAggregationContext.setRolledLogsIncludePattern(includePattern)
-        sparkConf.get(ROLLED_LOG_EXCLUDE_PATTERN).foreach { excludePattern =>
-          logAggregationContext.setRolledLogsExcludePattern(excludePattern)
-        }
-        appContext.setLogAggregationContext(logAggregationContext)
-      } catch {
-        case NonFatal(e) =>
-          logWarning(s"Ignoring ${ROLLED_LOG_INCLUDE_PATTERN.key} because the version of YARN " +
-            "does not support it", e)
-      }
-    }
     appContext.setUnmanagedAM(isClientUnmanagedAMEnabled)
 
     sparkConf.get(APPLICATION_PRIORITY).foreach { appPriority =>

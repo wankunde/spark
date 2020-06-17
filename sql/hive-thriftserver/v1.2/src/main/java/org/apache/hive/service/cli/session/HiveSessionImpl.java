@@ -36,6 +36,7 @@ import org.apache.hadoop.hive.common.cli.HiveFileProcessor;
 import org.apache.hadoop.hive.common.cli.IHiveFileProcessor;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+import org.apache.hadoop.hive.conf.VariableSubstitution;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.exec.FetchFormatter;
@@ -44,7 +45,6 @@ import org.apache.hadoop.hive.ql.exec.Utilities;
 import org.apache.hadoop.hive.ql.history.HiveHistory;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.parse.VariableSubstitution;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hive.common.util.HiveVersionInfo;
@@ -141,13 +141,6 @@ public class HiveSessionImpl implements HiveSession {
     sessionState.setUserIpAddress(ipAddress);
     sessionState.setIsHiveServerQuery(true);
     SessionState.start(sessionState);
-    try {
-      sessionState.reloadAuxJars();
-    } catch (IOException e) {
-      String msg = "Failed to load reloadable jar file path: " + e;
-      LOG.error(msg, e);
-      throw new HiveSQLException(msg, e);
-    }
     // Process global init file: .hiverc
     processGlobalInitFile();
     if (sessionConfMap != null) {
@@ -241,18 +234,20 @@ public class HiveSessionImpl implements HiveSession {
     } else if (varname.startsWith(SYSTEM_PREFIX)){
       String propName = varname.substring(SYSTEM_PREFIX.length());
       System.getProperties().setProperty(propName,
-              new VariableSubstitution().substitute(ss.getConf(),varvalue));
+              new VariableSubstitution(() -> SessionState.get().getHiveVariables())
+                      .substitute(ss.getConf(),varvalue));
     } else if (varname.startsWith(HIVECONF_PREFIX)){
       String propName = varname.substring(HIVECONF_PREFIX.length());
       setConf(varname, propName, varvalue, true);
     } else if (varname.startsWith(HIVEVAR_PREFIX)) {
       String propName = varname.substring(HIVEVAR_PREFIX.length());
       ss.getHiveVariables().put(propName,
-              new VariableSubstitution().substitute(ss.getConf(),varvalue));
+              new VariableSubstitution(() -> SessionState.get().getHiveVariables())
+                      .substitute(ss.getConf(),varvalue));
     } else if (varname.startsWith(METACONF_PREFIX)) {
       String propName = varname.substring(METACONF_PREFIX.length());
       Hive hive = Hive.get(ss.getConf());
-      hive.setMetaConf(propName, new VariableSubstitution().substitute(ss.getConf(), varvalue));
+      hive.setMetaConf(propName, new VariableSubstitution(() -> SessionState.get().getHiveVariables()).substitute(ss.getConf(), varvalue));
     } else {
       setConf(varname, varname, varvalue, true);
     }
@@ -263,7 +258,8 @@ public class HiveSessionImpl implements HiveSession {
   private static void setConf(String varname, String key, String varvalue, boolean register)
           throws IllegalArgumentException {
     HiveConf conf = SessionState.get().getConf();
-    String value = new VariableSubstitution().substitute(conf, varvalue);
+    String value = new VariableSubstitution(() -> SessionState.get().getHiveVariables())
+            .substitute(conf, varvalue);
     if (conf.getBoolVar(HiveConf.ConfVars.HIVECONFVALIDATION)) {
       HiveConf.ConfVars confVars = HiveConf.getConfVars(key);
       if (confVars != null) {

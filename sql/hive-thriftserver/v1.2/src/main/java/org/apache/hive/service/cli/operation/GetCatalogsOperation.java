@@ -18,7 +18,6 @@
 
 package org.apache.hive.service.cli.operation;
 
-import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveOperationType;
 import org.apache.hive.service.cli.FetchOrientation;
 import org.apache.hive.service.cli.HiveSQLException;
 import org.apache.hive.service.cli.OperationState;
@@ -47,9 +46,6 @@ public class GetCatalogsOperation extends MetadataOperation {
   public void runInternal() throws HiveSQLException {
     setState(OperationState.RUNNING);
     try {
-      if (isAuthV2Enabled()) {
-        authorizeMetaGets(HiveOperationType.GET_CATALOGS, null);
-      }
       setState(OperationState.FINISHED);
     } catch (HiveSQLException e) {
       setState(OperationState.ERROR);

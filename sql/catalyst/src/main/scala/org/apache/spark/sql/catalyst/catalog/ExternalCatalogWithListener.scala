@@ -17,6 +17,10 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.ListenerBus
@@ -175,8 +179,12 @@ class ExternalCatalogWithListener(delegate: ExternalCatalog)
       isOverwrite: Boolean,
       inheritTableSpecs: Boolean,
       isSrcLocal: Boolean): Unit = {
+    postToAll(LoadPartitionPreEvent(
+      db, table, loadPath, partition, isOverwrite, inheritTableSpecs, isSrcLocal))
     delegate.loadPartition(
       db, table, loadPath, partition, isOverwrite, inheritTableSpecs, isSrcLocal)
+    postToAll(LoadPartitionEvent(
+      db, table, loadPath, partition, isOverwrite, inheritTableSpecs, isSrcLocal))
   }
 
   override def loadDynamicPartitions(
@@ -186,7 +194,36 @@ class ExternalCatalogWithListener(delegate: ExternalCatalog)
       partition: TablePartitionSpec,
       replace: Boolean,
       numDP: Int): Unit = {
+    val partitions = calculateDynamicPartitions(new Path(loadPath), partition, numDP)
+    postToAll(LoadDynamicPartitionsPreEvent(db, table, loadPath, partitions, replace, numDP))
     delegate.loadDynamicPartitions(db, table, loadPath, partition, replace, numDP)
+    postToAll(LoadDynamicPartitionsEvent(db, table, loadPath, partitions, replace, numDP))
+  }
+
+  def calculateDynamicPartitions(
+       loadPath: Path,
+       partitionSpec: TablePartitionSpec,
+       numDP: Int): Array[TablePartitionSpec] = {
+    assert(numDP > 0)
+    try {
+      val fs = loadPath.getFileSystem(new Configuration())
+      fs.listStatus(loadPath).flatMap { fileStatus =>
+        val dirName = fileStatus.getPath.getName
+        if (dirName.contains("=")) {
+          val Array(partitionColumn, partitionValue) = dirName.split("=")
+          val newPartitionSpec = partitionSpec + (partitionColumn -> partitionValue)
+          if (numDP == 1) {
+            Array[TablePartitionSpec](newPartitionSpec)
+          } else {
+            calculateDynamicPartitions(fileStatus.getPath, newPartitionSpec, numDP - 1)
+          }
+        } else {
+          Array[TablePartitionSpec]()
+        }
+      }
+    } catch {
+      case ex: Exception => Array[TablePartitionSpec]()
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -198,7 +235,9 @@ class ExternalCatalogWithListener(delegate: ExternalCatalog)
       table: String,
       parts: Seq[CatalogTablePartition],
       ignoreIfExists: Boolean): Unit = {
+    postToAll(CreatePartitionsPreEvent(db, table, parts, ignoreIfExists))
     delegate.createPartitions(db, table, parts, ignoreIfExists)
+    postToAll(CreatePartitionsEvent(db, table, parts, ignoreIfExists))
   }
 
   override def dropPartitions(
@@ -208,7 +247,9 @@ class ExternalCatalogWithListener(delegate: ExternalCatalog)
       ignoreIfNotExists: Boolean,
       purge: Boolean,
       retainData: Boolean): Unit = {
+    postToAll(DropPartitionsPreEvent(db, table, partSpecs, ignoreIfNotExists, purge, retainData))
     delegate.dropPartitions(db, table, partSpecs, ignoreIfNotExists, purge, retainData)
+    postToAll(DropPartitionsEvent(db, table, partSpecs, ignoreIfNotExists, purge, retainData))
   }
 
   override def renamePartitions(
@@ -216,14 +257,18 @@ class ExternalCatalogWithListener(delegate: ExternalCatalog)
       table: String,
       specs: Seq[TablePartitionSpec],
       newSpecs: Seq[TablePartitionSpec]): Unit = {
+    postToAll(RenamePartitionsPreEvent(db, table, specs, newSpecs))
     delegate.renamePartitions(db, table, specs, newSpecs)
+    postToAll(RenamePartitionsEvent(db, table, specs, newSpecs))
   }
 
   override def alterPartitions(
       db: String,
       table: String,
       parts: Seq[CatalogTablePartition]): Unit = {
+    postToAll(AlterPartitionsPreEvent(db, table, parts))
     delegate.alterPartitions(db, table, parts)
+    postToAll(AlterPartitionsEvent(db, table, parts))
   }
 
   override def getPartition(

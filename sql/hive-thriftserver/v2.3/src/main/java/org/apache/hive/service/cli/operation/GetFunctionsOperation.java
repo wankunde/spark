@@ -77,23 +77,6 @@ public class GetFunctionsOperation extends MetadataOperation {
   @Override
   public void runInternal() throws HiveSQLException {
     setState(OperationState.RUNNING);
-    if (isAuthV2Enabled()) {
-      // get databases for schema pattern
-      IMetaStoreClient metastoreClient = getParentSession().getMetaStoreClient();
-      String schemaPattern = convertSchemaPattern(schemaName);
-      List<String> matchingDbs;
-      try {
-        matchingDbs = metastoreClient.getDatabases(schemaPattern);
-      } catch (TException e) {
-        setState(OperationState.ERROR);
-        throw new HiveSQLException(e);
-      }
-      // authorize this call on the schema objects
-      List<HivePrivilegeObject> privObjs = HivePrivilegeObjectUtils
-          .getHivePrivDbObjects(matchingDbs);
-      String cmdStr = "catalog : " + catalogName + ", schemaPattern : " + schemaName;
-      authorizeMetaGets(HiveOperationType.GET_FUNCTIONS, privObjs, cmdStr);
-    }
 
     try {
       if ((null == catalogName || "".equals(catalogName))

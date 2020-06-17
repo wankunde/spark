@@ -54,9 +54,6 @@ public class GetTableTypesOperation extends MetadataOperation {
   @Override
   public void runInternal() throws HiveSQLException {
     setState(OperationState.RUNNING);
-    if (isAuthV2Enabled()) {
-      authorizeMetaGets(HiveOperationType.GET_TABLETYPES, null);
-    }
     try {
       for (TableType type : TableType.values()) {
         rowSet.addRow(new String[] {tableTypeMapping.mapToClientType(type.toString())});
