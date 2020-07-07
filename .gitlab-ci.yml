@@ -1,0 +1,12 @@
+release-jar:
+  image: registry.leyantech.com/infra/maven:3.6.3
+  stage: deploy
+  variables:
+    MAVEN_OPTS: -Dmaven.repo.local=/cache/maven.repository
+    MAVEN_DEPLOY_OPTS: -Dmaven.test.skip=false -DskipTests=true -Phive -Phive-thriftserver -Pyarn -Pcdhhive
+  only:
+    - tags
+  tags:
+    - docker
+  script:
+    - publish_jar.py
