@@ -60,7 +60,7 @@ import org.apache.spark.sql.hive.HiveExternalCatalog.{DATASOURCE_SCHEMA, DATASOU
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.util.{CircularBuffer, Utils}
+import org.apache.spark.util.{CircularBuffer, ShutdownHookManager, Utils}
 
 /**
  * A class that wraps the HiveClient and converts its responses to externally visible classes.
@@ -153,6 +153,16 @@ private[hive] class HiveClientImpl(
       }
     }
   }
+
+  ShutdownHookManager.addShutdownHook(() =>
+    if (state != null) {
+      try {
+        state.close()
+      } catch {
+        case e: IllegalStateException =>
+        case e: Exception => logError("exception in state close stage.", e)
+      }
+    })
 
   // Log the default warehouse location.
   logInfo(
