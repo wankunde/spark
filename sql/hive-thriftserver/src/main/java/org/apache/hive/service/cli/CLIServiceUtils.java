@@ -43,7 +43,8 @@ public class CLIServiceUtils {
    * characters.
    */
   public static String patternToRegex(String pattern) {
-    if (pattern == null) {
+    // BUG FIX for thrift call from HUE
+    if (pattern == null || "*".equals(pattern)) {
       return ".*";
     } else {
       StringBuilder result = new StringBuilder(pattern.length());
