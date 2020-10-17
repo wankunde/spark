@@ -603,9 +603,27 @@ abstract class DescribeCommandBase extends RunnableCommand {
       header: Boolean): Unit = {
     if (header) {
       append(buffer, s"# ${output.head.name}", output(1).name, output(2).name)
+      append(buffer, "", "", "")
     }
     schema.foreach { column =>
       append(buffer, column.name, column.dataType.simpleString, column.getComment().orNull)
+    }
+  }
+
+  protected def describeSchemaWithoutPartition(
+      schema: StructType,
+      partitionColumnNames: Set[String],
+      buffer: ArrayBuffer[Row],
+      header: Boolean): Unit = {
+    if (header) {
+      append(buffer, s"# ${output.head.name}", output(1).name, output(2).name)
+      append(buffer, "", "", "")
+    }
+
+    schema.foreach { column =>
+      if (!partitionColumnNames.contains(column.name)) {
+        append(buffer, column.name, column.dataType.simpleString, column.getComment().orNull)
+      }
     }
   }
 
@@ -635,15 +653,16 @@ case class DescribeTableCommand(
         throw new AnalysisException(
           s"DESC PARTITION is not allowed on a temporary view: ${table.identifier}")
       }
-      describeSchema(catalog.lookupRelation(table).schema, result, header = false)
+      describeSchema(catalog.lookupRelation(table).schema, result, header = true)
     } else {
       val metadata = catalog.getTableMetadata(table)
       if (metadata.schema.isEmpty) {
         // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
         // inferred at runtime. We should still support it.
-        describeSchema(sparkSession.table(metadata.identifier).schema, result, header = false)
+        describeSchema(sparkSession.table(metadata.identifier).schema, result, header = true)
       } else {
-        describeSchema(metadata.schema, result, header = false)
+        describeSchemaWithoutPartition(
+          metadata.schema, metadata.partitionColumnNames.toSet, result, header = true)
       }
 
       describePartitionInfo(metadata, result)
@@ -662,6 +681,7 @@ case class DescribeTableCommand(
 
   private def describePartitionInfo(table: CatalogTable, buffer: ArrayBuffer[Row]): Unit = {
     if (table.partitionColumnNames.nonEmpty) {
+      append(buffer, "", "", "")
       append(buffer, "# Partition Information", "", "")
       describeSchema(table.partitionSchema, buffer, header = true)
     }
