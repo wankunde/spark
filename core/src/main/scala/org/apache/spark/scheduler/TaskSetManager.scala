@@ -429,7 +429,6 @@ private[spark] class TaskSetManager(
         // NO_PREF will not affect the variables related to delay scheduling
         if (maxLocality != TaskLocality.NO_PREF) {
           currentLocalityIndex = getLocalityIndex(taskLocality)
-          lastLaunchTime = curTime
         }
         // Serialize and return the task
         val serializedTask: ByteBuffer = try {
@@ -556,7 +555,7 @@ private[spark] class TaskSetManager(
       } else if (curTime - lastLaunchTime >= localityWaits(currentLocalityIndex)) {
         // Jump to the next locality level, and reset lastLaunchTime so that the next locality
         // wait timer doesn't immediately expire
-        lastLaunchTime += localityWaits(currentLocalityIndex)
+        // lastLaunchTime += localityWaits(currentLocalityIndex)
         logDebug(s"Moving to ${myLocalityLevels(currentLocalityIndex + 1)} after waiting for " +
           s"${localityWaits(currentLocalityIndex)}ms")
         currentLocalityIndex += 1
