@@ -78,6 +78,11 @@
       <artifactId>hive-beeline</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.apache.hive.shims</groupId>
+      <artifactId>hive-shims-scheduler</artifactId>
+      <version>1.1.0-cdh5.13.3</version>
+    </dependency>
+    <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-server</artifactId>
       <scope>provided</scope>
