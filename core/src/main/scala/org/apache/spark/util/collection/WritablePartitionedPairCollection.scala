@@ -36,6 +36,13 @@ private[spark] trait WritablePartitionedPairCollection[K, V] {
   /**
    * Iterate through the data in order of partition ID and then the given comparator. This may
    * destroy the underlying collection.
+   * {{{
+   *   1. 如果是Map结构存储，移动底层数组存储为紧凑存储结构
+   *   2. 对数据进行排序
+   *   3. 返回数组数据的迭代器
+   * }}}
+   * @param keyComparator
+   * @return
    */
   def partitionedDestructiveSortedIterator(keyComparator: Option[Comparator[K]])
     : Iterator[((Int, K), V)]

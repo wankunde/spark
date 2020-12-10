@@ -43,6 +43,12 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)
 
   /**
    * Sends a one-way asynchronous message. Fire-and-forget semantics.
+   * {{{
+   *  实现参考: NettyRpcEndpointRef.send()
+   *1. 封装 RequestMessage(sender = nettyEnv.address, receiver = this, message)转给NettyRpcEnv.send()发送
+   *2. 如果消息是本地，直接由dispatcher 组件转发处理消息
+   *3. 将详细序列化为 ByteBuffer,再包装为 OneWayOutboxMessage，找到对应的outBox进行发送，参考：postToOutbox()
+   * }}}
    */
   def send(message: Any): Unit
 

@@ -53,6 +53,14 @@ private[netty] case class RemoteProcessConnectionError(cause: Throwable, remoteA
 
 /**
  * An inbox that stores messages for an [[RpcEndpoint]] and posts messages to it thread-safely.
+ * {{{
+ *   底层实现选择的是LinkedList 而不是BlockQueue，好奇怪？
+ *   1. 消息的增加和消费都是单线程进行，所以需要进行额外加锁
+ *   2. 集合没有长度上限
+ *   3. post 投递消息，process方法循环取出一条消息，直到box为空，通过类型匹配执行endpoint内部的方法。
+ *   4. inbox 支持多线程消息消费（乱序，后到先消费？），numActiveThreads 为并发个数
+ *   5. box初始化时注入 OnStart 事件， 执行stop方法时，注入OnStop 事件
+ * }}}
  */
 private[netty] class Inbox(val endpointName: String, val endpoint: RpcEndpoint)
   extends Logging {

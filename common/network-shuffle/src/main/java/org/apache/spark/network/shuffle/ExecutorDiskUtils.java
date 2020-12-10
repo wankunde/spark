@@ -32,6 +32,9 @@ public class ExecutorDiskUtils {
   /**
    * Hashes a filename into the corresponding local directory, in a manner consistent with
    * Spark's DiskBlockManager.getFile().
+   *
+   * 该算法应该是写重复了～～
+   * 根据文件名的hash值，确定 localDir 和 subDirId，并返回该文件: localDir / subDir(%02x) / filename
    */
   public static File getFile(String[] localDirs, int subDirsPerLocalDir, String filename) {
     int hash = JavaUtils.nonNegativeHash(filename);

@@ -39,6 +39,23 @@ import org.apache.spark.util.NextIterator
  *
  * 2. Java serialization interface.
  *
+ * 1. 类结构
+ * Serializer -> SerializerInstance -> SerializationStream / DeserializationStream
+ * JavaSerializer -> JavaSerializerInstance -> JavaSerializationStream / JavaDeserializationStream
+ * KryoSerializer -> KryoSerializerInstance -> KryoSerializationStream / KryoDeserializationStream
+ * UnsafeRowSerializer.newInstance() -> UnsafeRowSerializerInstance
+ *   提供将 UnsafeRow 作为value直接全部序列化输出的功能
+ *
+ * 2. 核心方法
+ * 2.1 Serializer.newInstance() 获取对应的Instance
+ * 2.2 SerializerInstance.serialize() / deserialize()
+ *     实现序列化和反序列化 Object <--> ByteBuffer，也是后续所有操作的核心
+ * 2.3 serializeStream() / deserializeStream()
+ *     通常我们的序列化需求是实现从流中写入或读取数据，所以需要对目标流进行封装,而这个代理的流又提供了直接读写对象的方法
+ * eg.Java的实现就是通过Java的 ObjectOutputStream 和 ObjectInputStream 实现 writeObject 和 readObject操作
+ *    Kryo通过 writeClassAndObject 和 readClassAndObject 方法实现
+ *    UnsafeRow 有些特殊，第一是他只对Value做了流的序列化，第二是Value的读写是通过 (DataLength+DataBytes)实现
+ *
  * @note Serializers are not required to be wire-compatible across different versions of Spark.
  * They are intended to be used to serialize/de-serialize data within a single Spark application.
  */

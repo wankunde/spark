@@ -29,6 +29,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Decoder used by the client side to encode server-to-client responses.
  * This encoder is stateless so it is safe to be shared by multiple threads.
+ *
+ * 通过前面的TransportFrameDecoder已经将数据拆包成frame格式，这里对数据包进行还原，
+ * 包括 msgType, requestId, Int等信息
  */
 @ChannelHandler.Sharable
 public final class MessageDecoder extends MessageToMessageDecoder<ByteBuf> {

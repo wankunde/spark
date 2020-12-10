@@ -29,6 +29,18 @@ import org.slf4j.LoggerFactory;
 /**
  * Encoder used by the server side to encode server-to-client responses.
  * This encoder is stateless so it is safe to be shared by multiple threads.
+ * <pre>
+ * 对输入的Message对象进行encode
+ *
+ * Header对象封装
+ * 1 - 8 : frameLength
+ * 1     : msgType
+ * 8     : requestId
+ * 4     : encodedLength  之前aka使用，现在没什么用了？
+ *
+ * 如果消息body为空，直接向下传递 Header
+ * 如果消息body不为空，向下传递 MessageWithHeader
+ * </pre>
  */
 @ChannelHandler.Sharable
 public final class MessageEncoder extends MessageToMessageEncoder<Message> {

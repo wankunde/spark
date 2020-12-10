@@ -40,6 +40,10 @@ public abstract class RpcHandler {
    * Neither this method nor #receiveStream will be called in parallel for a single
    * TransportClient (i.e., channel).
    *
+   * <pre>
+   *  接收RPC请求，进行处理，并通过callback返回直接结果，实现参考 NettyRpcHandler
+   * </pre>
+   *
    * @param client A channel client which enables the handler to make requests back to the sender
    *               of this RPC. This will always be the exact same object for a particular channel.
    * @param message The serialized bytes of the RPC.

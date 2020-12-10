@@ -31,6 +31,10 @@ import org.apache.spark.util.{ShutdownHookManager, Utils}
  *
  * Block files are hashed among the directories listed in spark.local.dir (or in
  * SPARK_LOCAL_DIRS, if it's set).
+ *
+ * 1. 创建文件: createTempLocalBlock 和 createTempShuffleBlock, 两个方法用途不同，产生的文件名前缀不同
+ * 2. 读取文件： getAllFiles 和 getAllBlocks
+ * 3. 删除文件： 没有开启ExternalShuffleSerice 或者 当前节点不是Driver，在程序停止时会删除文件
  */
 private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolean) extends Logging {
 
@@ -54,6 +58,15 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
   private val shutdownHook = addShutdownHook()
 
   /** Looks up a file by hashing it into one of our local subdirectories. */
+  /**
+   * 1. 根据文件名确定数据在配置的本地目录中的哪一个文件夹 /ONE_OF_YARN_LOCAL_DIR
+   * 2. 确定文件是在64个子目录中的哪一个
+   * 3. return 文件: /ONE_OF_YARN_LOCAL_DIR/blockmgr/ONE_OF_64SUBDIRS/filename
+   * 4. 根据传入的文件名/BlockId，就可以直接定位到文件的绝对路径
+   *
+   * @param filename
+   * @return
+   */
   // This method should be kept in sync with
   // org.apache.spark.network.shuffle.ExecutorDiskUtils#getFile().
   def getFile(filename: String): File = {
@@ -124,7 +137,12 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
     (blockId, getFile(blockId))
   }
 
-  /** Produces a unique block id and File suitable for storing shuffled intermediate results. */
+  /** Produces a unique block id and File suitable for storing shuffled intermediate results.
+   * {{{
+   *   BlockId: temp_shuffle_806292c8-129f-4a02-9ffb-c4500c46f211
+   *   File: /ONE_OF_YARN_LOCAL_DIR/blockmgr/ONE_OF_64SUBDIRS/${blockId}
+   * }}}
+   */
   def createTempShuffleBlock(): (TempShuffleBlockId, File) = {
     var blockId = new TempShuffleBlockId(UUID.randomUUID())
     while (getFile(blockId).exists()) {
@@ -137,6 +155,10 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
    * Create local directories for storing block data. These directories are
    * located inside configured local directories and won't
    * be deleted on JVM exit when using the external shuffle service.
+   * ON_YARN mode LOCAL_DIRS:
+   *   /dir1/blockmgr
+   *   /dir2/blockmgr
+   *   /dir3/blockmgr
    */
   private def createLocalDirs(conf: SparkConf): Array[File] = {
     Utils.getConfiguredLocalDirs(conf).flatMap { rootDir =>

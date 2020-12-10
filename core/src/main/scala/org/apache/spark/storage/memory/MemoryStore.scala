@@ -77,6 +77,11 @@ private[storage] trait BlockEvictionHandler {
 /**
  * Stores blocks in memory, either as Arrays of deserialized Java objects or as
  * serialized ByteBuffers.
+ *
+ * 1. 数据被以Block为单位进行管理，方便Put, Get, Remove相关操作
+ * 2. 这些数据被Put之前先由MemoryManager进行StorageMemory申请，Remove Block后会同步由MemoryManager释放StorageMemory
+ * 3. 获取最大可用内存，已经使用内存
+ *
  */
 private[spark] class MemoryStore(
     conf: SparkConf,
@@ -138,6 +143,8 @@ private[spark] class MemoryStore(
    *
    * The caller should guarantee that `size` is correct.
    *
+   * 获取传入的ChunkedByteBuffer数据，封装为一个SerializedMemoryEntry对象，作为指定的BlockId的数据进行管理
+   *
    * @return true if the put() succeeded, false otherwise.
    */
   def putBytes[T: ClassTag](
@@ -182,6 +189,13 @@ private[spark] class MemoryStore(
    *         First, the block is partially-unrolled; second, the block is entirely unrolled and
    *         the actual stored data size is larger than reserved, but we can't request extra
    *         memory).
+   *
+   * 1. 默认每从迭代器取16条记录会做一次内存使用检查，否则直接将数据放入一个Vector中
+   * 2. 如果这个Vector的内存使用大于threshold时，以1.5倍速度向上扩展，当申请不到内存时，暂停迭代器的遍历
+   * 3. 所有申请的Unroll Memory内存使用一个Map进行记录: (taskId -> reserved memory)，内存申请失败，返回失败
+   * 4. 迭代器遍历完毕，释放Unroll内存，根据实际Entry大小，申请对应的Storage内存空间
+   * 5. 上层调用方法：putIteratorAsValues: 只支持ON_HEAP方式存储，putIteratorAsBytes 支持更多类型存储方式
+   * 6. 如果数据正常展开，返回Right，展开失败，返回Left
    */
   private def putIterator[T](
       blockId: BlockId,
@@ -373,6 +387,16 @@ private[spark] class MemoryStore(
     }
   }
 
+  /**
+   * {{{
+   * 1. 找到该blockId
+   * 2. 要求该BlockId必须为DeserializedMemoryEntry
+   * 3. 返回该非序列化数据的迭代器对象
+   * }}}
+   *
+   * @param blockId
+   * @return
+   */
   def getValues(blockId: BlockId): Option[Iterator[_]] = {
     val entry = entries.synchronized { entries.get(blockId) }
     entry match {
@@ -425,6 +449,10 @@ private[spark] class MemoryStore(
    * Can fail if either the block is bigger than our memory or it would require replacing
    * another block from the same RDD (which leads to a wasteful cyclic replacement pattern for
    * RDDs that don't fit into memory that we want to avoid).
+   *
+   * 当MemoryPool申请内部空间不够的时候，就要释放已经使用的内存
+   * 1. 遍历当前Map，获取非当前RDD且内存使用模式和当前相同的Block，对候选释放的Block加锁
+   * 2. 对候选的Block进行内存空间释放
    *
    * @param blockId the ID of the block we are freeing space for, if any
    * @param space the size of this block

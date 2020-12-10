@@ -40,6 +40,32 @@ import org.apache.spark.unsafe.types.UTF8String
 
 /**
  * Some utility function to convert Spark data source filters to Parquet filters.
+ * {{{
+ * ColumnFilterPredicate
+ * 1. 这个是Parquet列过滤器，实现子类有: Eq, NotEq, Lt, Gt, LtEq, GtEq
+ *
+ * 2. 为了方便外部代码注入过滤器，Parquet提供了工具类来生成过滤器对象 FilterApi
+ *
+ *   IntColumn foo = intColumn("foo");
+ *   DoubleColumn bar = doubleColumn("x.y.bar");
+ *   // foo == 10 || bar &lt;= 17.0
+ *   FilterPredicate pred = or(eq(foo, 10), ltEq(bar, 17.0));
+ *
+ * Spark在这个Api的基础上继续封装了ParquetFilters这个支持lambda的工具类.
+ *
+ *  eg, makeEq 偏函数，如果传入的的是 ParquetBooleanType类型，返回一个函数。目标函数可以根据传入的column path
+ * 构造一个column对象，然后返回一个过滤器eq的实例
+ * case ParquetBooleanType =>
+ *       (n: Array[String], v: Any) => FilterApi.eq(booleanColumn(n), v.asInstanceOf[JBoolean])
+ *
+ * 3 程序调用入口: createFilter 函数将catalyst中的filter转换为Parquet的Predicate
+ * 3.1 case sources.EqualTo(name, value) 通过case语句解析sources.Filter 对象
+ * 3.2 上面的makeEq函数根据sources.Filter类型进行lift成普通函数
+ * 3.3 执行普通函数，生成一个FilterPredicate 实例  .map(_(nameToParquetField(name).fieldNames, value))
+ * 3.4 createFilter call From: v1: ParquetFileFormat  v2: ParquetPartitionReaderFactory
+ *
+ * 4. nameToParquetField 根据传入的parquet文件的schema生成这些字段生成字段映射关系
+ * }}}
  */
 class ParquetFilters(
     schema: MessageType,

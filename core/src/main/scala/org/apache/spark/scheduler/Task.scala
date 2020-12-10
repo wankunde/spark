@@ -40,6 +40,11 @@ import org.apache.spark.util._
  * and sends the task output back to the driver application. A ShuffleMapTask executes the task
  * and divides the task output to multiple buckets (based on the task's partitioner).
  *
+ * {{{
+ *   Task
+ *      ResultTask: 在传入的Iterator上调用task的func函数
+ *      ShuffleMapTask: 存在写Shuffle数据的过程
+ * }}}
  * @param stageId id of the stage this task belongs to
  * @param stageAttemptId attempt id of the stage this task belongs to
  * @param partitionId index of the number in the RDD

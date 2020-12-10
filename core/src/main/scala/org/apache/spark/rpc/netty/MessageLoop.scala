@@ -91,6 +91,18 @@ private sealed abstract class MessageLoop(dispatcher: Dispatcher) extends Loggin
   }
 }
 
+/**
+ * {{{
+ *  通过post方法进行消息转发和消费
+ *  1. 通过register 和 unregister 方法在内部维护一个name到inbox的映射
+ *  2. post方法调用对应的inbox的post方法，将消息存储到对应的List中；active 对应的inbox到待消费Queue中
+ *  3. 内部有一个threadpool负责消息的转发和消费，每个线程都在执行 receiveLoop 函数，如果消费失败，如果抛出的异常
+ *    不是InterruptedException异常，则重新提交执行 receiveLoop 函数
+ *  4. Loop消费线程先取出待消费inbox，再调用process方法消费inbox中的全部消息
+ *
+ *  服务转发的线程池个数默认是机器核心个数，这个感觉有些诡异，需要确认
+ * }}}
+ */
 private object MessageLoop {
   /** A poison inbox that indicates the message loop should stop processing messages. */
   val PoisonPill = new Inbox(null, null)

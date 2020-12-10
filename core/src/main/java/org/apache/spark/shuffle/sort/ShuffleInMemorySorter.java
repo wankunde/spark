@@ -53,6 +53,9 @@ final class ShuffleInMemorySorter {
   /**
    * Whether to use radix sort for sorting in-memory partition ids. Radix sort is much faster
    * but requires additional memory to be reserved memory as pointers are added.
+   *
+   * 由 spark.shuffle.sort.useRadixSort 参数控制，默认开启
+   * 额外占用内存 => ?
    */
   private final boolean useRadixSort;
 

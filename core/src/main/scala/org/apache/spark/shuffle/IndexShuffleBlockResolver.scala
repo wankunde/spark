@@ -60,6 +60,12 @@ private[spark] class IndexShuffleBlockResolver(
    *
    * When the dirs parameter is None then use the disk manager's local directories. Otherwise,
    * read from the specified directories.
+   * {{{
+   * 1. blockId name : shuffle_ + shuffleId + _ + mapId + _ + 0 + .data
+   * 2. Index file 可能路径：one of localDirs / one of subDirs / filename
+   *   如果Index file是被blockManager管理的Block，
+   *   file = /ONE_OF_YARN_LOCAL_DIR/blockmgr/ONE_OF_64SUBDIRS/filename
+   * }}}
    */
    def getDataFile(shuffleId: Int, mapId: Long, dirs: Option[Array[String]]): File = {
     val blockId = ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID)
@@ -73,6 +79,12 @@ private[spark] class IndexShuffleBlockResolver(
    *
    * When the dirs parameter is None then use the disk manager's local directories. Otherwise,
    * read from the specified directories.
+   * {{{
+   * 1. blockId name : shuffle_ + shuffleId + _ + mapId + _ + 0 + .index
+   * 2. Index file 可能路径：localDir / subDir(%02x) / filename
+   *   如果Index file是被blockManager管理的Block，
+   *   file = /ONE_OF_YARN_LOCAL_DIR/blockmgr/ONE_OF_64SUBDIRS/filename
+   * }}}
    */
   private def getIndexFile(
       shuffleId: Int,
@@ -157,6 +169,14 @@ private[spark] class IndexShuffleBlockResolver(
    * replace them with new ones.
    *
    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
+   * {{{
+   *   核心数据: dataTmp 和 lengths
+   *   1. 判断我们需要commit的数据文件和索引文件是否已经存在，且文件内存和我们输入的Lengths校验通过，跳过执行
+   *   2. 索引文件不能直接写，先生成一个临时索引文件
+   *   3. 如有三个reduce数据，数据长度分别为: (R1 -> 100),(R1 -> 50),(R1 -> 200),
+   *   Index File= {0, 100, 150, 350}
+   *   4. 通过rename方式提交数据文件和索引文件
+   * }}}
    */
   def writeIndexFileAndCommit(
       shuffleId: Int,
@@ -215,6 +235,19 @@ private[spark] class IndexShuffleBlockResolver(
     }
   }
 
+  /**
+   * {{{
+   * 实现Shuffle Block数据的读取
+   * 1. 根据BlockId解析出需要读取的数据的 shuffleId, mapId, 及需要的reduceId数据范围
+   * 2. 到 dir目录寻找Index文件，Index Block name = shuffle_ + shuffleId + _ + mapId + _ + 0 + .index
+   * 3. Index File使用Long类型依次记录每个Reduce数据的offset
+   * 4. 封装 FileSegmentManagedBuffer(Data Block File，startOffset, endOffset - startOffset)
+   * }}}
+   *
+   * @param blockId
+   * @param dirs
+   * @return
+   */
   override def getBlockData(
       blockId: BlockId,
       dirs: Option[Array[String]]): ManagedBuffer = {

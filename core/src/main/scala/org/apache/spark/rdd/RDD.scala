@@ -352,6 +352,12 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached.
+   *
+   * {{{
+   * 1. blockId : "rdd_" + rddId + "_" + splitIndex
+   * 2. 如果这个Block在BlockManager中可以找到，直接返回（比如RDD显示缓存用于多次使用）
+   * 3. 第一次调用时，肯定不存在该Block和CheckPoint，进入compute() 方法
+   * }}}
    */
   private[spark] def getOrCompute(partition: Partition, context: TaskContext): Iterator[T] = {
     val blockId = RDDBlockId(id, partition.index)

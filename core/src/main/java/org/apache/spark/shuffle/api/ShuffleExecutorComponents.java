@@ -47,6 +47,12 @@ public interface ShuffleExecutorComponents {
    * Called once per map task to create a writer that will be responsible for persisting all the
    * partitioned bytes written by that map task.
    *
+   * <pre>
+   *  0. 当前唯一实现: LocalDiskShuffleExecutorComponents,对应Writer：LocalDiskShuffleMapOutputWriter
+   *  1. getPartitionWriter(): 获取partitionWriter写outputTempFile
+   *  2. commitAllPartitions(): 所有数据全部写成功后，写index文件并rename data文件
+   * </pre>
+   *
    * @param shuffleId Unique identifier for the shuffle the map task is a part of
    * @param mapTaskId An ID of the map task. The ID is unique within this Spark application.
    * @param numPartitions The number of partitions that will be written by the map task. Some of

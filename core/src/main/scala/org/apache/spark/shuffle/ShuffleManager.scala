@@ -26,17 +26,47 @@ import org.apache.spark.{ShuffleDependency, TaskContext}
  *
  * NOTE: this will be instantiated by SparkEnv so its constructor can take a SparkConf and
  * boolean isDriver as parameters.
+ *
+ * {{{
+ * 1. 在sparkEnv对象实例化的时候，根据参数 spark.shuffle.manager (sort / tungsten-sort) 来决定
+ * 2. 现在只有一个实现类: SortShuffleManager
+ * 3. 在 ShuffleWriteProcessor.write() 方法(MapTask)中，获取writer实例，负责具体的数据写入
+ * }}}
+ *
  */
 private[spark] trait ShuffleManager {
 
   /**
    * Register a shuffle with the manager and obtain a handle for it to pass to tasks.
+   * {{{
+   *   BypassMergeSortShuffleHandle: map端没有combine，且reduce num<=200
+   *   SerializedShuffleHandle
+   *      1. map端没有combine
+   *      2. serializer 支持relocation(KryoSerializer and Spark SQL's custom serializers)
+   *      3. partition个数小于 1 << 24
+   *   BaseShuffleHandle
+   * }}}
    */
   def registerShuffle[K, V, C](
       shuffleId: Int,
       dependency: ShuffleDependency[K, V, C]): ShuffleHandle
 
-  /** Get a writer for a given partition. Called on executors by map tasks. */
+  /**
+   * Get a writer for a given partition. Called on executors by map tasks.
+   * {{{
+   *   核心还是根据handle确定使用哪种Writer
+   *   SerializedShuffleHandle -> UnsafeShuffleWriter
+   *   BypassMergeSortShuffleHandle -> BypassMergeSortShuffleWriter
+   *   BaseShuffleHandle -> SortShuffleWriter
+   * }}}
+   * @param handle
+   * @param mapId
+   * @param context
+   * @param metrics
+   * @tparam K
+   * @tparam V
+   * @return
+   */
   def getWriter[K, V](
       handle: ShuffleHandle,
       mapId: Long,

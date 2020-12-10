@@ -177,6 +177,15 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
       return partStream;
     }
 
+    /**
+     * <pre>
+     * 返回 outputTempFile 文件的fileChannel 的包装类对象。
+     * 在调用close() 方法时，实际是记录了当前parittion的数据大小。
+     * </pre>
+     *
+     * @return
+     * @throws IOException
+     */
     @Override
     public Optional<WritableByteChannelWrapper> openChannelWrapper() throws IOException {
       if (partChannel == null) {

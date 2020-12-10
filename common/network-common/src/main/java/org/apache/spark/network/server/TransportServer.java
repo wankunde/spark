@@ -42,6 +42,18 @@ import org.apache.spark.network.util.*;
 
 /**
  * Server for the efficient, low-level streaming service.
+ *
+ * <pre>
+ *   1. 架构图:https://img2018.cnblogs.com/blog/816981/201810/816981-20181016145505263-870721231.jpg
+ *   2. 在init方法中启动nettty服务
+ *   3. netty的io mode通过 spark.${module:shuffle}.io.mode 参数指定，支持 NIO(default) 和 EPOLL两种模式
+ *   4. RpcHandler 响应RPC Request
+ *   5. bootstraps 在我们自定义的Handler上进行功能扩展，比如安全上的加解密等
+ *   6.
+ *   7.
+ *   8.
+ * </pre>
+ *
  */
 public class TransportServer implements Closeable {
   private static final Logger logger = LoggerFactory.getLogger(TransportServer.class);

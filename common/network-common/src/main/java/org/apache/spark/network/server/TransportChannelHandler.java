@@ -34,6 +34,10 @@ import org.apache.spark.network.protocol.ResponseMessage;
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 /**
+ * <pre>
+ *  大体上可以理解为是 requestHandler 和 responseHandler 的封装，大部分时间都是转发给两个handler处理
+ *  核心事件处理 RequestMessage -> requestHandler, ResponseMessage -> responseHandler
+ * </pre>
  * The single Transport-level Channel handler which is used for delegating requests to the
  * {@link TransportRequestHandler} and responses to the {@link TransportResponseHandler}.
  *

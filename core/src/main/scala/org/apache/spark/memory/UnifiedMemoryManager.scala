@@ -41,6 +41,16 @@ import org.apache.spark.storage.BlockId
  * up most of the storage space, in which case the new blocks will be evicted immediately
  * according to their respective storage levels.
  *
+ * 1. MemoryManager的唯一实现类
+ * 2. 内存分区计算
+ *
+ *  * Executor Memory: -Xmx2048M
+ *  * JVM Max Memory: 1820M
+ *  * Unified Memory: (1820M - 300M) * 0.6 = 912M
+ *  * UI Display : 912 * 1024 * 1024 / 1000 / 1000 = 956.3M
+ *  * Execution Memory: 956.3M * 0.5 = 478.2M
+ *  * Storage Memory: 956.3M * 0.5 = 478.2M
+ *
  * @param onHeapStorageRegionSize Size of the storage region, in bytes.
  *                          This region is not statically reserved; execution can borrow from
  *                          it if necessary. Cached blocks can be evicted only if actual

@@ -402,6 +402,12 @@ private[spark] class MapOutputTrackerMaster(
   // HashMap for storing shuffleStatuses in the driver.
   // Statuses are dropped only by explicit de-registering.
   // Exposed for testing
+  /**
+   * {{{
+   *   Map Key : shuffleId shuffle轮次
+   *   Map Value: {0 -> MapStatus(0), 1 -> MapStatus(1) .. n -> MapStatus(n)}
+   * }}}
+   */
   val shuffleStatuses = new ConcurrentHashMap[Int, ShuffleStatus]().asScala
 
   private val maxRpcMessageSize = RpcUtils.maxMessageSizeBytes(conf)
@@ -840,7 +846,9 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
   /**
    * Get or fetch the array of MapStatuses for a given shuffle ID. NOTE: clients MUST synchronize
    * on this array when reading it, because on the driver, we may be changing it in place.
-   *
+   * {{{
+   *   通过RPC向Master请求指定ShuffleId的OutputStatuses数据
+   * }}}
    * (It would be nice to remove this restriction in the future.)
    */
   private def getStatuses(shuffleId: Int, conf: SparkConf): Array[MapStatus] = {
@@ -982,6 +990,18 @@ private[spark] object MapOutputTracker extends Logging {
    *
    * If any of the statuses is null (indicating a missing location due to a failed mapper),
    * throws a FetchFailedException.
+   *
+   * {{{
+   *   eg:
+   *   statuses : s1 -> {5, 8, 12}, s2 -> {2, 5, 7}
+   *   (startMapIndex, endMapIndex) = (0, 1) 全部Map集合
+   *   shuffleId = 1
+   *   (startPartition, endPartition) = (1, 2) endPartition不包含
+   *   splitsByAddress {
+   *     BlockManagerId1 -> { ((ShuffleBlockId(1, mapId=0, reduceId=1), 8, mapIndex=0)) },
+   *     BlockManagerId2 -> { ((ShuffleBlockId(1, mapId=1, reduceId=1), 5, mapIndex=1)) }
+   *   }
+   * }}}
    *
    * @param shuffleId Identifier for the shuffle
    * @param startPartition Start of map output partition ID range (included in range)

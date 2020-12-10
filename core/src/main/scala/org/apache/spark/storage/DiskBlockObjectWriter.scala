@@ -35,6 +35,17 @@ import org.apache.spark.util.collection.PairsWriter
  *
  * This class does not support concurrent writes. Also, once the writer has been opened it cannot be
  * reopened again.
+ *
+ * {{{
+ *   Writer对应的Stream流的封装
+ *   FileOutputStream
+ *    TimeTrackingOutputStream: 增加所有操作耗时统计
+ *      BufferedOutputStream: 对write这种低效操作进行buffer缓存，然后批量写和metrics统计
+ *        ManualCloseBufferedOutputStream: 该类close()方法失效，需要显示调用manuClose() 方法才可以
+ *          wrapStream: SerializerManager 根据BlockId判断是否需要进行加密和压缩
+ *            SerializationStream: 支持直接将Write Object, KV到流
+ * }}}
+ *
  */
 private[spark] class DiskBlockObjectWriter(
     val file: File,
@@ -163,6 +174,11 @@ private[spark] class DiskBlockObjectWriter(
   /**
    * Flush the partial writes and commit them as a single atomic block.
    * A commit may write additional bytes to frame the atomic block.
+   *
+   * {{{
+   *  committedPosition: 物理文件实际持久化的数据，如果当前文件处于打开状态，关闭文件后，取文件当前位置
+   *  FileSegment: 一个文件可能对应多个FileSegment
+   * }}}
    *
    * @return file segment with previous offset and length committed on this call.
    */

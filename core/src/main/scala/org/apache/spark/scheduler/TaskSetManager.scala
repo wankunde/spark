@@ -46,6 +46,12 @@ import org.apache.spark.util.collection.MedianHeap
  * THREADING: This class is designed to only be called from code with a lock on the
  * TaskScheduler (e.g. its event handlers). It should not be called from other threads.
  *
+ * {{{
+ * 1. addPendingTask(): 添加task到pending队列
+ * 2. addPendingTasks(): task刚实例化的时候就已经将task添加到pending队列
+ * 3. handleFailedTask(), executorLost()checkAndSubmitSpeculatableTask() 异常处理是会再次添加task
+ * }}}
+ *
  * @param sched           the TaskSchedulerImpl associated with the TaskSetManager
  * @param taskSet         the TaskSet to manage scheduling for
  * @param maxTaskFailures if any particular task fails this number of times, the entire
@@ -224,7 +230,21 @@ private[spark] class TaskSetManager(
 
   private[scheduler] var emittedTaskSizeWarning = false
 
-  /** Add a task to all the pending-task lists that it should be on. */
+  /** Add a task to all the pending-task lists that it should be on.
+   * {{{
+   * 遍历task的 preferredLocations 属性，添加task id到对应的tasks pending 队列
+   *
+   * - forExecutor队列: 根据task的计算输入来源不同进行分类处理.
+   *   1. ExecutorCacheTaskLocation -> 加入 forExecutor 队列
+   *   2. HostTaskLocation -> Nothing
+   *   3. HDFSCacheTaskLocation -> 根据缓存的hdfs主机，加入该主机上的所有executors的 forExecutor 队列
+   *
+   * - forHost队列: 加入每个preferredLocations主机的forHost队列
+   * - forRack队列: 如开启resolveRacks，加入每个preferredLocations主机Rack的forRack队列
+   * - noPrefs队列: 如果没有preferredLocations信息，直接加入noPrefs队列
+   * - all队列: 所有task直接加入all 队列
+   * }}}
+   */
   private[spark] def addPendingTask(
       index: Int,
       resolveRacks: Boolean = true,
@@ -271,6 +291,7 @@ private[spark] class TaskSetManager(
    * Return None if the list is empty.
    * This method also cleans up any tasks in the list that have already
    * been launched, since we want that to happen lazily.
+   * {{{ 取出任务队列的最后一个task index }}}
    */
   private def dequeueTaskFromList(
       execId: String,
@@ -315,6 +336,18 @@ private[spark] class TaskSetManager(
    * Dequeue a pending task for a given node and return its index and locality level.
    * Only search for tasks matching the given locality constraint.
    *
+   * 在给定条件下选出适合运行的task
+   *{{{
+   * Pending Queue
+   *  forExecutor = { '1' -> {2, 3} }
+   *  forHost = { 'host1' -> {3, 4} }
+   *  forRack = { 'rack1' -> {4, 5} }
+   *
+   * eg:
+   *  (execId, host, maxLocality) = ('1', 'host1', Host) => Output queue: {3, 2, 4}
+   *  (execId, host, maxLocality) = ('2', 'host1', Rack) => Output queue: {4, 3, 5}
+   *  (execId, host, maxLocality) = ('2', 'host2', Rack) => {5, 4}
+   *}}}
    * @return An option containing (task index within the task set, locality, is speculative?)
    */
   private def dequeueTask(
@@ -384,6 +417,13 @@ private[spark] class TaskSetManager(
    * NOTE: this function is either called with a maxLocality which
    * would be adjusted by delay scheduling algorithm or it will be with a special
    * NO_PREF locality which will be not modified
+   *
+   * {{{
+   * 0. 整个方法是单线程分配的（非线程安全）
+   * 1. dequeueTask(execId, host, allowedLocality) 在给定条件下选出适合运行的task
+   * 2. 设置该task的running 标识位=1， 防止重复调度, 在task执行完毕后，再移除该task
+   * 3. 设置 taskInfos 和 taskAttempts等信息，发送task start event，最后返回 TaskDescription
+   * }}}
    *
    * @param execId the executor Id of the offered resource
    * @param host  the host Id of the offered resource

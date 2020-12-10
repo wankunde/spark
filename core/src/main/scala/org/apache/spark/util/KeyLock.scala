@@ -24,6 +24,17 @@ import java.util.concurrent.ConcurrentHashMap
  * (identity is tested using the `equals` method), we ensure there is only one `func` running at
  * the same time.
  *
+ * {{{
+ * 自己实现的锁管理，提供默认释放锁管理，区别主要在锁可重入功能
+ *
+ *  |    属性    |    KeyLock   |  synchronized |  ReentrantLock |
+ *  |   可重入   |      否       |      是       |       是       |
+ *  |   公平锁   |      否       |      否       |   是（默认否）   |
+ *  |  TimeOut  |      否       |      否       |       是       |
+ *  | Condition |      否       |      否       |       是       |
+ *  | Wait Block|      是       |      是       |       否       |
+ * }}}
+ *
  * @tparam K the type of key to identify a lock. This type must implement `equals` and `hashCode`
  *           correctly as it will be the key type of an internal Map.
  */

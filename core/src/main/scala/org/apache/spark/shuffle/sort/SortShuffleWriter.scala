@@ -47,7 +47,14 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
 
-  /** Write a bunch of records to this task's output */
+  /**
+   * Write a bunch of records to this task's output
+   * {{{
+   *   1. 通过 ExternalSorter.insertAll() 不断将数据插入到buffer中，
+   *      当内存数据满了之后，对内存结果进行排序，然后flush到磁盘，生成一个SpillFile
+   *   2. 插入完后后合并所有spill文件和内存中数据，生成最终文件
+   * }}}
+   */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
     sorter = if (dep.mapSideCombine) {
       new ExternalSorter[K, V, C](

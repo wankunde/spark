@@ -21,6 +21,16 @@ package org.apache.spark.scheduler
  * A backend interface for scheduling systems that allows plugging in different ones under
  * TaskSchedulerImpl. We assume a Mesos-like model where the application gets resource offers as
  * machines become available and can launch tasks on them.
+ *
+ *{{{
+ *  reviveOffers(): 发送ReviveOffers消息，通过此消息向所有注册的executors进行分配任务
+ *  call from:
+ *  1. TaskScheduler.submitTasks()
+ *  2. TaskScheduler.statusUpdate() 方法中对接收到的task的state=TaskState.LOST，在通知该executor丢失后
+ *  3. TaskScheduler.executorLost() 明确说明executor lost时
+ *  4. TaskScheduler.handleFailedTask() 中task执行失败
+ *  5. TaskScheduler.checkSpeculatableTasks() 执行推测任务时
+ *}}}
  */
 private[spark] trait SchedulerBackend {
   private val appId = "spark-application-" + System.currentTimeMillis

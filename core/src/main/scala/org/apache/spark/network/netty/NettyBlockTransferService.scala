@@ -47,6 +47,13 @@ import org.apache.spark.util.Utils
 
 /**
  * A BlockTransferService that uses Netty to fetch a set of blocks at time.
+ *
+ * {{{
+ *   1. 服务在SparkEnv中实例化，在BlockManager中init()
+ *   2. 默认Block数据传输port为随机端口，（NM会启动多个Executor，如果是固定端口，服务就无法启动了）
+ *   3. rpcHandler : NettyBlockRpcServer(conf.getAppId, serializer, blockDataManager)
+ * }}}
+ *
  */
 private[spark] class NettyBlockTransferService(
     conf: SparkConf,

@@ -55,6 +55,10 @@ private[spark] class DiskStore(
   /**
    * Invokes the provided callback function to write the specific block.
    *
+   * {{{
+   *   根据BlockId封装对应的文件Channel，调用writeFunc函数向这个Block文件写入数据
+   * }}}
+   *
    * @throws IllegalStateException if the block already exists in the disk store.
    */
   def put(blockId: BlockId)(writeFunc: WritableByteChannel => Unit): Unit = {
@@ -89,6 +93,11 @@ private[spark] class DiskStore(
       s" on disk in ${TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTimeNs)} ms")
   }
 
+  /**
+   * 内存数据全部写入到BlockId 对应的磁盘文件
+   * @param blockId
+   * @param bytes
+   */
   def putBytes(blockId: BlockId, bytes: ChunkedByteBuffer): Unit = {
     put(blockId) { channel =>
       bytes.writeFully(channel)
@@ -169,6 +178,14 @@ private class DiskBlockData(
   */
   override def toNetty(): AnyRef = new DefaultFileRegion(file, 0, size)
 
+  /**
+   * {{{
+   *   eg. file length = 230, maxMemoryMapBytes = 100
+   *   return chunks{ chunk1(100), chunk2(100), chunk3(30) }
+   * }}}
+   * @param allocator
+   * @return
+   */
   override def toChunkedByteBuffer(allocator: (Int) => ByteBuffer): ChunkedByteBuffer = {
     Utils.tryWithResource(open()) { channel =>
       var remaining = blockSize
@@ -185,6 +202,10 @@ private class DiskBlockData(
     }
   }
 
+  /**
+   * 此函数和 {@link org.apache.spark.network.buffer.FileSegmentManagedBuffer#nioByteBuffer()} 很类似
+   * @return
+   */
   override def toByteBuffer(): ByteBuffer = {
     require(blockSize < maxMemoryMapBytes,
       s"can't create a byte buffer of size $blockSize" +

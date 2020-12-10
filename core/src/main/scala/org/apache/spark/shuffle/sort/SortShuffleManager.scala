@@ -131,6 +131,29 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       shouldBatchFetch = canUseBatchFetch(startPartition, endPartition, context))
   }
 
+
+  /**
+   *
+   * {{{
+   *   1. 这个方法计算的是部分Map的数据，getReader 计算的是全部Map的数据
+   *   2. blocksByAddress 返回样例数据
+   *   blocksByAddress {
+   *     BlockManagerId1 -> { ((ShuffleBlockId(1, mapId=0, reduceId=1), 8, mapIndex=0)) },
+   *     BlockManagerId2 -> { ((ShuffleBlockId(1, mapId=1, reduceId=1), 5, mapIndex=1)) }
+   *   }
+   *
+   * }}}
+   * @param handle
+   * @param startMapIndex
+   * @param endMapIndex
+   * @param startPartition
+   * @param endPartition
+   * @param context
+   * @param metrics
+   * @tparam K
+   * @tparam C
+   * @return
+   */
   override def getReaderForRange[K, C](
       handle: ShuffleHandle,
       startMapIndex: Int,

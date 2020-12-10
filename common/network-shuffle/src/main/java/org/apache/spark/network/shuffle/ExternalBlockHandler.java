@@ -53,6 +53,17 @@ import org.apache.spark.network.util.TransportConf;
  * Handles registering executors and opening shuffle or disk persisted RDD blocks from them.
  * Blocks are registered with the "one-for-one" strategy, meaning each Transport-layer Chunk
  * is equivalent to one block.
+ *
+ * <pre>
+ * FetchShuffleBlocks:  打开Shuffle流, 新版Shuffle协议
+ * OpenBlocks: 打开Shuffle流, 老版本协议
+ * RegisterExecutor: 在resolver中的executors map中存储所有[ appId-execId -> execInfo ]的Pair,
+ *   BlockManager在env.blockManager.initialize(conf.getAppId))中，ExternalShuffleService=true进行注册
+ *
+ *RemoveBlocks : 删除Executor机器上的Block文件
+ *GetLocalDirsForExecutors: 传入一组execId，返回这些exec对应的localDirs属性
+ * </pre>
+ *
  */
 public class ExternalBlockHandler extends RpcHandler {
   private static final Logger logger = LoggerFactory.getLogger(ExternalBlockHandler.class);
@@ -320,6 +331,21 @@ public class ExternalBlockHandler extends RpcHandler {
     }
   }
 
+  /**
+   * <pre>
+   *   内部迭代依次迭代需要读取的mapId和reduceId， 通过blockManager.getBlockData() 读取shuffle data的block数据
+   *
+   *   mapIds : { 6, 7 }
+   *   reduceIds : { {1,2}, {3,4,5} }
+   *               mapIdx  mapId  reduceIdx  reduceId
+   *   blockData      0       6       0          1
+   *   blockData      0       6       1          2
+   *   blockData      1       7       0          3
+   *   blockData      1       7       1          4
+   *   blockData      1       7       2          5
+   *
+   * </pre>
+   */
   private class ShuffleManagedBufferIterator implements Iterator<ManagedBuffer> {
 
     private int mapIdx = 0;

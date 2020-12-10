@@ -109,6 +109,18 @@ public class OneForOneBlockFetcher {
    * Analyze the pass in blockIds and create FetchShuffleBlocks message.
    * The blockIds has been sorted by mapId and reduceId. It's produced in
    * org.apache.spark.MapOutputTracker.convertMapStatuses.
+   * <pre>
+   * blockIds:               map  startReduce endReduce   batchFetchEnabled
+   *   shuffle_1001_0_0_1     0       0           1           true
+   *   shuffle_1001_1_2_3     1       2           3           true
+   *   shuffle_1001_2_4       2       4           4           false
+   *   shuffle_1001_2_5       2       5           5           false
+   *   shuffle_1001_2_6       2       6           6           false
+   *
+   * shuffleId     1001
+   * mapIds        [ 0, 1, 2 ]
+   * reduceIdArr   { [0, 1], [2, 3], [4, 5, 6] }
+   * </pre>
    */
   private FetchShuffleBlocks createFetchShuffleBlocksMsg(
       String appId, String execId, String[] blockIds) {

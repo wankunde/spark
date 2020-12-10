@@ -501,6 +501,15 @@ public final class OnHeapColumnVector extends WritableColumnVector {
   }
 
   // Spilt this function out since it is the slow path.
+
+  /**
+   * example:
+   * type: ShortType   capacity: 5
+   * init data:
+   * shortData: [s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0]
+   * nulls    : [     0,      1,      2,      3,      4]
+   *
+   */
   @Override
   protected void reserveInternal(int newCapacity) {
     if (isArray() || type instanceof MapType) {

@@ -31,6 +31,11 @@ import org.apache.spark.util.Utils
 /**
  * Result returned by a ShuffleMapTask to a scheduler. Includes the block manager address that the
  * task ran on as well as the sizes of outputs for each reducer, for passing on to the reduce tasks.
+ * {{{
+ *  loc: BlockManagerId 数据目前由哪一个BlockManager进行管理
+ *  uncompressedSizes: Array[Long] 最终ShuffleFile中各个 partition 大小，eg：{10, 5, 20}
+ *  mapTaskId: Long: taskId
+ * }}}
  */
 private[spark] sealed trait MapStatus {
   /** Location where this task was run. */

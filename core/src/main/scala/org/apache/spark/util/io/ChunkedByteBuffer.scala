@@ -37,6 +37,10 @@ import org.apache.spark.util.Utils
  * Read-only byte buffer which is physically stored as multiple chunks rather than a single
  * contiguous array.
  *
+ * chunks: 数据被存储在一组ByteBuffer中
+ *  c1 : ByteBuffer(0, 2, 4, 6)
+ *  c2 : ByteBuffer(1, 3, 5, 5)
+ *
  * @param chunks an array of [[ByteBuffer]]s. Each buffer in this array must have position == 0.
  *               Ownership of these buffers is transferred to the ChunkedByteBuffer, so if these
  *               buffers may also be used elsewhere then the caller is responsible for copying

@@ -111,6 +111,28 @@ private[storage] object BlockInfo {
  * completion or failure.
  *
  * This class is thread-safe.
+ *
+ * 数据结构:
+ * infos = HashMap[BlockId, BlockInfo]
+ * writeLocksByTask = HashMap[TaskAttemptId, Set[BlockId]] with MultiMap[TaskAttemptId, BlockId]
+ * readLocksByTask = HashMap[TaskAttemptId, ConcurrentHashMultiset[BlockId]]
+ *
+ * lockForReading：
+ *  * 在没有写的Block，判断为查找成功
+ *  * 对找到的BlockInfo.readerCount 属性+1操作
+ *  * 在readLocksByTask 里记录当前Task正在读取该Block
+ *  * 如果是阻塞模式，会进行wait，等待唤醒
+ *
+ * lockForWriting:
+ *  * Block没有在写，也没有在读，判断为查找成功
+ *  * 对找到的BlockInfo.writerTask 属性设置为当前进程
+ *  * 在 writeLocksByTask 里记录当前Task正在写该Block
+ *  * 如果是阻塞模式，会进行wait，等待唤醒
+ *
+ * lockNewBlockForWriting: 添加新的Block，再调用lockForWriting
+ *
+ * unlock: 分别释放可能存在的写锁或读锁，并唤醒等待线程
+ *
  */
 private[storage] class BlockInfoManager extends Logging {
 

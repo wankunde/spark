@@ -123,6 +123,18 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     this.shuffleExecutorComponents = shuffleExecutorComponents;
   }
 
+  /**
+   * <pre>
+   * 1. 每个目标partition生成一个blockId， 根据该blockId对应的文件获取一个 DiskBlockObjectWriter
+   * （每个Reduce一个文件，所以该Shuffle要求限制Reduce个数）
+   * 2. 将所有数据写入各自的Reduce文件中
+   * 3. 合并生成最终的Data和Index文件
+   * 4. 返回MapStatus(BlockManagerId, Reduce DataIndex, MapId)数据
+   * 5. 所有数据没有排序
+   * </pre>
+   * @param records
+   * @throws IOException
+   */
   @Override
   public void write(Iterator<Product2<K, V>> records) throws IOException {
     assert (partitionWriters == null);
@@ -185,6 +197,11 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   /**
    * Concatenate all of the per-partition files into a single combined file.
+   *
+   * {{{
+   *     1. mapOutputWriter 创建一个临时数据文件，依次向文件内写入所有分区的临时数据内容
+   *     2. 将各partition数据大小写入Index文件，commit最终的Data和Index文件
+   * }}}
    *
    * @return array of lengths, in bytes, of each partition of the file (used by map output tracker).
    */

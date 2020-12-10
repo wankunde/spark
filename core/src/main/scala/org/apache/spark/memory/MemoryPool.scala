@@ -23,6 +23,10 @@ import javax.annotation.concurrent.GuardedBy
  * Manages bookkeeping for an adjustable-sized region of memory. This class is internal to
  * the [[MemoryManager]]. See subclasses for more details.
  *
+ * 1. 两个实现类: StorageMemoryPool 和 ExecutionMemoryPool
+ * 2. 主要属性： poolSize = memoryUsed +  memoryFree
+ * 3. 实现类主要方法: acquireMemory(blockId: BlockId, numBytes: Long), releaseMemory(size: Long)
+ *
  * @param lock a [[MemoryManager]] instance, used for synchronization. We purposely erase the type
  *             to `Object` to avoid programming errors, since this object should only be used for
  *             synchronization purposes.

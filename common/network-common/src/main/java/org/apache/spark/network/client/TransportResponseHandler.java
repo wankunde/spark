@@ -157,6 +157,19 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
     }
   }
 
+  /**
+   * <pre>
+   * 1. ChunkFetchSuccess / ChunkFetchFailure
+   *   根据 streamChunkId 执行其注册的callback的onSuccess/onFailure方法
+   * 2. RpcResponse / RpcFailure
+   *   根据 requestId 执行其注册的callback的onSuccess/onFailure方法
+   * 3. StreamResponse / StreamFailure
+   *   这个有些特殊，后续再看
+   * </pre>
+   *
+   * @param message
+   * @throws Exception
+   */
   @Override
   public void handle(ResponseMessage message) throws Exception {
     if (message instanceof ChunkFetchSuccess) {

@@ -214,6 +214,8 @@ public class TransportContext implements Closeable {
    * Creates the server- and client-side handler which is used to handle both RequestMessages and
    * ResponseMessages. The channel is expected to have been successfully created, though certain
    * properties (such as the remoteAddress()) may not be available yet.
+   *
+   * 创建 requestHandler 和 responseHandler，返回对应的包装 TransportChannelHandler
    */
   private TransportChannelHandler createChannelHandler(Channel channel, RpcHandler rpcHandler) {
     TransportResponseHandler responseHandler = new TransportResponseHandler(channel);

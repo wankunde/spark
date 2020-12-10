@@ -32,6 +32,16 @@ import org.apache.spark.rpc._
 /**
  * A message dispatcher, responsible for routing RPC messages to the appropriate endpoint(s).
  *
+ * {{{
+ *  将Message投递到对应的endPointRef
+ *  RpcAddress(host, port) : Server在该地址提供TCP通信服务
+ *  RpcEndpointAddress: 一个具体服务的转发地址
+ *  NettyRpcEndpointRef: 在上述通信地址的基础上，增加了Conf信息，rpcEnv信息
+ *
+ *  1. postMessage() 方法主要还是对MessageLoop.post()方法的一个包装
+ *  2. postRemoteMessage() 和 postLocalMessage() 和 postOneWayMessage() 针对不同消息类型调用 postMessage()
+ * }}}
+ *
  * @param numUsableCores Number of CPU cores allocated to the process, for sizing the thread pool.
  *                       If 0, will consider the available CPUs on the host.
  */

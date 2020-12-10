@@ -74,6 +74,10 @@ import org.apache.spark.network.yarn.util.HadoopConfigProvider;
  * is because an application running on the same Yarn cluster may choose to not use the external
  * shuffle service, in which case its setting of `spark.authenticate` should be independent of
  * the service's.
+ * <pre>
+ * 1. serviceInit() 启动TransportServer服务
+ * 2. blockHandler 处理RPC请求事件
+ * </pre>
  */
 public class YarnShuffleService extends AuxiliaryService {
   private static final Logger logger = LoggerFactory.getLogger(YarnShuffleService.class);

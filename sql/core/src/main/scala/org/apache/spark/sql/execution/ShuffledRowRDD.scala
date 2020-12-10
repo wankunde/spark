@@ -113,6 +113,12 @@ class CoalescedPartitioner(val parent: Partitioner, val partitionStartIndices: A
  * `dependency.partitioner` is the original partitioner used to partition
  * map output, and `dependency.partitioner.numPartitions` is the number of pre-shuffle partitions
  * (i.e. the number of partitions of the map output).
+ *
+ * {{{
+ * ShuffleMapTask 和 ResultTask 在进行读取时进入RDD的iterator方法，
+ * 如果是Shuffle读取数据，使用的是 ShuffledRowRDD的compute() 方法来获取数据。
+ * 根据ShuffledRowRDDPartition的`spec: ShufflePartitionSpec`属性创建Reader，调用Reader.read() 方法读取数据
+ * }}}
  */
 class ShuffledRowRDD(
     var dependency: ShuffleDependency[Int, InternalRow, InternalRow],

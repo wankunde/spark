@@ -27,6 +27,13 @@ import java.nio.file.Files;
 /**
  * Keeps the index information for a particular map output
  * as an in-memory LongBuffer.
+ * <pre>
+ *   offsets  0  10  25  30
+ *   reduce  10  15  5
+ *   startReduceId    endReduceId   ShuffleIndexRecord
+ *      0                  1            (start = 0, length=10)
+ *      1                  3            (start = 10, length=20)
+ * </pre>
  */
 public class ShuffleIndexInformation {
   /** offsets as long buffer */

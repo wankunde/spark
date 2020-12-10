@@ -310,6 +310,10 @@ public class ExternalShuffleBlockResolver {
    * Sort-based shuffle data uses an index called "shuffle_ShuffleId_MapId_0.index" into a data file
    * called "shuffle_ShuffleId_MapId_0.data". This logic is from IndexShuffleBlockResolver,
    * and the block id format is from ShuffleDataBlockId and ShuffleIndexBlockId.
+   * <pre>
+   *   1. 读取并缓存index文件, 解析需要读取的数据的(offset, length)
+   *   2. 映射shuffle data的(offset, length) 为FileSegmentManagedBuffer
+   * </pre>
    */
   private ManagedBuffer getSortBasedShuffleBlockData(
     ExecutorShuffleInfo executor, int shuffleId, long mapId, int startReduceId, int endReduceId) {

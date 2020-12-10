@@ -25,6 +25,16 @@ import io.netty.util.NettyRuntime;
 
 /**
  * A central location that tracks all the settings we expose to users.
+ * <pre>
+ * Spark 内部数据传输的配置，设计到Spark 内存RPC Call和Shuffle阶段的数据传输
+ * 1. Shuffle阶段初始化
+ *   YarnShuffleService :: new TransportConf("shuffle", new HadoopConfigProvider(conf))
+ *
+ * 2. Spark RPC 这里会传入module参数，每个module可以使用自己的模块的io参数，如在 NettyRpcEnv中module="rpc",
+ *  NettyRpcEnv 中的 downloadClient 传入的是files
+ *
+ *  SparkTransportConf :: fromSparkConf(module: String)
+ * </pre>
  */
 public class TransportConf {
 

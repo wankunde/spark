@@ -42,6 +42,10 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
  * interceptor. When the interceptor indicates that it doesn't need to read any more data,
  * framing resumes. Interceptors should not hold references to the data buffers provided
  * to their handle() method.
+ *
+ * <pre>
+ *  将数据拆包成Frame形式，供后续decode
+ * </pre>
  */
 public class TransportFrameDecoder extends ChannelInboundHandlerAdapter {
 
@@ -73,6 +77,12 @@ public class TransportFrameDecoder extends ChannelInboundHandlerAdapter {
     this.consolidateThreshold = consolidateThreshold;
   }
 
+  /**
+   * 将数据的数据解包，以ByteBuf为单位向后传递消息
+   * @param ctx
+   * @param data
+   * @throws Exception
+   */
   @Override
   public void channelRead(ChannelHandlerContext ctx, Object data) throws Exception {
     ByteBuf in = (ByteBuf) data;
@@ -104,6 +114,21 @@ public class TransportFrameDecoder extends ChannelInboundHandlerAdapter {
     }
   }
 
+  /**
+   * <pre>
+   *  case 1:
+   *  buf1          :  | b1 b2 b3 b4 b5 b6 b7 b8 |
+   *  nextFrameSize :   readLong()
+   *
+   *  case 2:
+   *  buf1  :  | b1 b2 b3 |                    -> frameLenBuf :  | b1 b2 b3 |
+   *  buf2  :             | b4 b5 |            -> frameLenBuf :  | b1 b2 b3 b4 b5 |
+   *  buf3  :                     | b6 b7 b8 | -> frameLenBuf :  | b1 b2 b3 b4 b5 b6 b7 b8 |
+   *
+   *  nextFrameSize :  long  <- frameLenBuf
+   * </pre>
+   * @return nextFrameSize
+   */
   private long decodeFrameSize() {
     if (nextFrameSize != UNKNOWN_FRAME_SIZE || totalSize < LENGTH_SIZE) {
       return nextFrameSize;
@@ -138,6 +163,14 @@ public class TransportFrameDecoder extends ChannelInboundHandlerAdapter {
     return nextFrameSize;
   }
 
+  /**
+   * <pre>
+   * 1. 读取frameSize，再根据frameSize 读取数据
+   * 2. 如果当前bytebuf数据大于frameSize，返回第一个byteBuf的slice
+   * 3. 否则返回一组buf 组成的frameBuf
+   * </pre>
+   * @return
+   */
   private ByteBuf decodeNext() {
     long frameSize = decodeFrameSize();
     if (frameSize == UNKNOWN_FRAME_SIZE) {
@@ -198,6 +231,9 @@ public class TransportFrameDecoder extends ChannelInboundHandlerAdapter {
   }
 
   /**
+   * 1. firstBuf size > bytesToRead ==> firstBuf slice()
+   * 2. firstBuf size < bytesToRead ==> firstBuf
+   *
    * Takes the first buffer in the internal list, and either adjust it to fit in the frame
    * (by taking a slice out of it) or remove it from the internal list.
    */

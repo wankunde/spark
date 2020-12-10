@@ -618,7 +618,7 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product {
    * This is a variant of [[apply]] that returns the node as BaseType (if the type matches).
    */
   def p(number: Int): BaseType = apply(number).asInstanceOf[BaseType]
-
+  CollapseCodegenStages
   private def getNodeNumbered(number: MutableInt): Option[TreeNode[_]] = {
     if (number.i < 0) {
       None

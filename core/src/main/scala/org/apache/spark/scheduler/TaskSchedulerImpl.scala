@@ -212,6 +212,12 @@ private[spark] class TaskSchedulerImpl(
     waitBackendReady()
   }
 
+  /**
+   * {{{
+   *   提交taskset，并调用backend分配任务
+   *   backend在reviveOffers方法中发送ReviveOffers消息，通过此消息向所有注册的executors进行分配任务
+   * }}}
+   */
   override def submitTasks(taskSet: TaskSet): Unit = {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
@@ -331,6 +337,12 @@ private[spark] class TaskSchedulerImpl(
       s" ${manager.parent.name}")
   }
 
+  /**
+   * {{{
+   * 1. 对所有offers进行locality任务调度
+   * 2. 调度没有校验task resource requirement，统一安装 CPUS_PER_TASK 和 resourcesReqsPerTask 条件即可
+   * }}}
+   */
   private def resourceOfferSingleTaskSet(
       taskSet: TaskSetManager,
       maxLocality: TaskLocality,
@@ -394,6 +406,44 @@ private[spark] class TaskSchedulerImpl(
    * Called by cluster manager to offer resources on slaves. We respond by asking our active task
    * sets for tasks in order of priority. We fill each node with tasks in a round-robin manner so
    * that tasks are balanced across the cluster.
+   * {{{
+   *   1. hostToExecutors 结构
+   *   host1 -> Set{ executor_1, executor_2 }
+   *   host2 -> Set{ executor_3, executor_4 }
+   *
+   *   executorIdToHost 结构
+   *   executor_1 -> host1
+   *   executor_2 -> host1
+   *   executor_3 -> host2
+   *   executor_4 -> host2
+   *
+   *   executorIdToRunningTaskIds 结构，正在运行的task集合
+   *   executor_1 -> Set{ tid_1, tid_2 }
+   *   executor_2 -> Set{ tid_3, tid_4 }
+   *   executor_3 -> Set{ tid_5, tid_6 }
+   *   executor_4 -> Set{ tid_7, tid_8 }
+   *
+   *   hostsByRack 结构
+   *   rack1 -> Set(host1, host2)
+   *   rack2 -> Set(host3, host4)
+   *
+   *   offers: WorkerOffer(1,node_manager_1,0,Some(192.168.1.2:44534),Map())
+   *
+   * 1. 过滤offers中host或executorId在黑名单的offer
+   * 2. tasks, availableResources, availableCpus 将offer转换为对象
+   * 3. sortedTaskSets 待调度的任务集合
+   * 4. executorIdToRunningTaskIds
+   *
+   * for (taskSet <- sortedTaskSets) {
+   *   for (currentMaxLocality <- taskSet.myLocalityLevels) {
+   *     do {
+   *       launchedTaskAtCurrentMaxLocality = resourceOfferSingleTaskSet(taskSet,
+   *         currentMaxLocality, shuffledOffers, availableCpus,
+   *         availableResources, tasks, addressesWithDescs)
+   *     } while (launchedTaskAtCurrentMaxLocality)
+   *   }
+   * }
+   * }}}
    */
   def resourceOffers(offers: IndexedSeq[WorkerOffer]): Seq[Seq[TaskDescription]] = synchronized {
     // Mark each slave as alive and remember its hostname

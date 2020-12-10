@@ -33,6 +33,8 @@ import java.nio.ByteBuffer;
  * For example, in the case of {@link NettyManagedBuffer}, the buffers are reference counted.
  * In that case, if the buffer is going to be passed around to a different thread, retain/release
  * should be called.
+ *
+ * 对Java的ByteBuffer，Netty的ByteBuf，File三种方式数据进行封装，返回对应的ByteBuffer数据或者InputStream流
  */
 public abstract class ManagedBuffer {
 

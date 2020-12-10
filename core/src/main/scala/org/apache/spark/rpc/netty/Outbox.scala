@@ -92,6 +92,15 @@ private[netty] case class RpcOutboxMessage(
 
 }
 
+/**
+ * {{{
+ * 1. send() 将消息临时存储 messages: LinkedList中
+ * 2. drainOutbox() 消费消息
+ * 3. launchConnectTask(): 消费消息前先建立连接
+ * }}}
+ * @param nettyEnv
+ * @param address
+ */
 private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
 
   outbox => // Give this an alias so we can use it more clearly in closures.

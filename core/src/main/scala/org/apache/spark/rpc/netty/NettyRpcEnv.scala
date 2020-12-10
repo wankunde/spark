@@ -42,6 +42,19 @@ import org.apache.spark.rpc._
 import org.apache.spark.serializer.{JavaSerializer, JavaSerializerInstance, SerializationStream}
 import org.apache.spark.util.{ByteBufferInputStream, ByteBufferOutputStream, ThreadUtils, Utils}
 
+/**
+ * {{{
+ * 1. 通过NettyRpcEnvFactory create方法创建实例
+ * 2. 主要变量
+ *  * transportConf: RPC通信配置
+ *  * dispatcher:
+ * }}}
+ * @param conf
+ * @param javaSerializerInstance
+ * @param host
+ * @param securityManager
+ * @param numUsableCores
+ */
 private[netty] class NettyRpcEnv(
     val conf: SparkConf,
     javaSerializerInstance: JavaSerializerInstance,
@@ -155,6 +168,13 @@ private[netty] class NettyRpcEnv(
     dispatcher.stop(endpointRef)
   }
 
+  /**
+   * 1. 如果当前节点已经和 endpointRef 建立连接，直接调用连接client进行发送
+   * 2. 否则找到对应的 RpcAddress 对应的outbox，等待发送消息
+   *
+   * @param receiver
+   * @param message
+   */
   private def postToOutbox(receiver: NettyRpcEndpointRef, message: OutboxMessage): Unit = {
     if (receiver.client != null) {
       message.sendWith(receiver.client)
@@ -286,6 +306,9 @@ private[netty] class NettyRpcEnv(
     javaSerializerInstance.serializeStream(out)
   }
 
+  /**
+   * 没理解，这里两次调用withValue的逻辑是什么？deserialize 和网络client有什么关系？直接反序列化数据不就可以了吗？
+   */
   private[netty] def deserialize[T: ClassTag](client: TransportClient, bytes: ByteBuffer): T = {
     NettyRpcEnv.currentClient.withValue(client) {
       deserialize { () =>
@@ -625,6 +648,12 @@ private[netty] object RequestMessage {
     }
   }
 
+  /**
+   * {{{
+   *   | senderAddress  |  endpointRef( refAddress, endpointName) |  deserialize(bytes) |
+   *   根据ByteBuffer 的结构，构建
+   * }}}
+   */
   def apply(nettyEnv: NettyRpcEnv, client: TransportClient, bytes: ByteBuffer): RequestMessage = {
     val bis = new ByteBufferInputStream(bytes)
     val in = new DataInputStream(bis)
@@ -651,6 +680,10 @@ private[netty] case class RpcFailure(e: Throwable)
 
 /**
  * Dispatches incoming RPCs to registered endpoints.
+ *
+ * {{{
+ *   receive方法接收消息，并转发消息给对应endpoint inbox进行处理，消息可以有callback，也可以没有。
+ * }}}
  *
  * The handler keeps track of all client instances that communicate with it, so that the RpcEnv
  * knows which `TransportClient` instance to use when sending RPCs to a client endpoint (i.e.,

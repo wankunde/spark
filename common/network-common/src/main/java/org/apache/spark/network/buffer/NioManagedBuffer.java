@@ -28,6 +28,8 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 
 /**
  * A {@link ManagedBuffer} backed by {@link ByteBuffer}.
+ * 如果需要ByteBuffer，直接返回内部数据
+ * 如果需要InputStream，对ByteBuffer进行封装为ByteBufInputStream后返回
  */
 public class NioManagedBuffer extends ManagedBuffer {
   private final ByteBuffer buf;

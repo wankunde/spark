@@ -160,6 +160,24 @@ private[spark] class HostLocalDirManager(
  * retrieving blocks both locally and remotely into various stores (memory, disk, and off-heap).
  *
  * Note that [[initialize()]] must be called before the BlockManager is usable.
+ *
+ * 数据结构：
+ * BlockManager
+ *    diskStore(diskBlockManager)
+ *    diskBlockManager
+ *    memoryStore
+ *    memoryManager(memoryStore) 外部传入
+ *    blockInfoManager
+ *    blockStoreClient 用于读取远程Executor管理的Block数据
+ *
+ *    BlockManagerSlaveEndpoint ： RPC Client
+ *
+ * 功能函数:
+ * 1. extends BlockDataManager
+ * 1.1 get***Data: 读取本地BlockId对应的文件到ManagedBuffer数据中
+ * 1.2 putBlockData** : 写入数据到BlockId
+ * 1.3 releaseLock: 上述操作完成时对 Block释放锁
+ *
  */
 private[spark] class BlockManager(
     executorId: String,
@@ -273,6 +291,12 @@ private[spark] class BlockManager(
 
     protected def saveToDiskStore(): Unit
 
+    /**
+     * 从InputStream中以对象为单位，以迭代器的方式读取数据，并放入memoryStore管理的 StorageMemory中
+     *
+     * @param inputStream
+     * @return
+     */
     private def saveDeserializedValuesToMemoryStore(inputStream: InputStream): Boolean = {
       try {
         val values = serializerManager.dataDeserializeStream(blockId, inputStream)(classTag)
@@ -290,6 +314,12 @@ private[spark] class BlockManager(
       }
     }
 
+    /**
+     * 直接将bytes 数据作为BlockId的序列化数据直接存储到 memoryStore的StorageMemory中
+     *
+     * @param bytes
+     * @return
+     */
     private def saveSerializedValuesToMemoryStore(bytes: ChunkedByteBuffer): Boolean = {
       val memoryMode = level.memoryMode
       memoryStore.putBytes(blockId, blockSize, memoryMode, () => {
@@ -309,6 +339,15 @@ private[spark] class BlockManager(
      *
      * If keepReadLock is true, this method will hold the read lock when it returns (even if the
      * block already exists). If false, this method will hold no locks when it returns.
+     *
+     * 1. 先在doPut中创建BlockInfo，并交给BlockInfoManager进行读写管理；然后再调用body方法进行实际数据写入
+     * 2. 内存的存储支持序列化和非序列化两种方式，两种方法实现的入参不同，所以该类的子类需要实现BlockId的不同数据
+     * 获取方式，当内存不够时，且允许使用磁盘，自动降级到磁盘的序列化
+     * 3. 磁盘序列化 saveToDiskStore()
+     * ByteBufferBlockStoreUpdater : 数据是保存在内存中的，将内存 ChunkedByteBuffer 中的数据全部写入到磁盘文件
+     * TempFileBasedBlockStoreUpdater : 数据本身就是磁盘文件，直接将文件rename
+     * 4. save blockId成功，通知master进行更新
+     * 5. 如果这个BlockId副本数大于1，启动子线程进行异步副本复制
      *
      * @return true if the block was already present or if the put succeeded, false otherwise.
      */
@@ -711,6 +750,8 @@ private[spark] class BlockManager(
    * droppedMemorySize exists to account for when the block is dropped from memory to disk (so
    * it is still valid). This ensures that update in master will compensate for the increase in
    * memory on slave.
+   *
+   * 向Master汇报BlockId的信息
    */
   private def reportBlockStatus(
       blockId: BlockId,
@@ -791,6 +832,24 @@ private[spark] class BlockManager(
 
   /**
    * Get block from local block manager as an iterator of Java objects.
+   *
+   * {{{
+   *   返回的数据要求是非序列化的，所以对Cached Block分情况处理
+   *   0. 判断本地blockInfoManager中是否有管理 blockId，没有的话返回None
+   *   1. (Deserialized, ON_Memory) -> memoryStore.getValues(blockId).get
+   *   2. (serialized, ON_Memory) ->
+   *     2.1 memoryStore.getBytes(blockId) 获取ChunkedByteBuffer数据并转化为InputStream
+   *     2.2 根据Block的Value的数据类型获取Serializer
+   *     2.3 Serializer 对InputSteam封装为 DeserializationStream
+   *     2.4 DeserializationStream 转换为Value类型的迭代器
+   *   3. (Deserialized, ON_DISK) ->
+   *     3.1 diskStore.getBytes(BlockId)
+   *     3.2 参考 2.2->2.4 得到Value数据的迭代器
+   *     3.3 尝试将该Block的deserialized 数据存储到MemoryStore中
+   *   4. (serialized, ON_DISK) -> 和3类似，不过是先尝试将Deserialized存储到内存中，然后再计算Value数据的迭代器
+   *
+   *   对上面得到的迭代器结果增加释放锁清理操作，再封装成一个 BlockResult对象供后续使用
+   * }}}
    */
   def getLocalValues(blockId: BlockId): Option[BlockResult] = {
     logDebug(s"Getting local block $blockId")
@@ -843,6 +902,9 @@ private[spark] class BlockManager(
 
   /**
    * Get block from the local block manager as serialized bytes.
+   *
+   * 增加读锁，然后调用内部方法 {@code #doGetLocalBytes()} 读Block的序列化数据
+   *
    */
   def getLocalBytes(blockId: BlockId): Option[BlockData] = {
     logDebug(s"Getting local block $blockId as bytes")
@@ -855,6 +917,18 @@ private[spark] class BlockManager(
    *
    * Must be called while holding a read lock on the block.
    * Releases the read lock upon exception; keeps the read lock upon successful return.
+   *
+   * {{{
+   *   返回的数据要求是序列化的，所以对Cached Block分情况处理
+   *   1. (Deserialized, ON_DISK) -> diskStore.getBytes(BlockId)
+   *   2. (Deserialized, ON_Memory) -> 需要实现完整的Block数据到ChunkedByteBuffer序列化的过程
+   *      2.1 返回该Block的values的迭代器对象
+   *      2.2 根据Block中的数据类型获取Serializer实例
+   *      2.3 生成工具类 ChunkedByteBufferOutputStream 对象
+   *      2.4 将迭代器中数据中全部写入中间Stream对象，返回封装好的ByteBuffer对象
+   *   3. (serialized, ON_DISK) -> diskStore.getBytes(BlockId)并尝试将该Block数据放入memoryStore中管理
+   *   4. (serialized, ON_Memory) -> memoryStore.getBytes(blockId)
+   * }}}
    */
   private def doGetLocalBytes(blockId: BlockId, info: BlockInfo): BlockData = {
     val level = info.level
@@ -913,6 +987,12 @@ private[spark] class BlockManager(
    * transformation function which expected to open the file. If there is any exception during this
    * transformation then block access falls back to fetching it from the remote executor via the
    * network.
+   *
+   * {{{
+   *   1. master请求BlockId的locationsAndStatus
+   *   2. 如果block在Executor机器上，根据localDirs属性，找到Block并封装为FileSegmentManagedBuffer
+   *   3. 获取远程Block数据
+   * }}}
    *
    * @param blockId identifies the block to get
    * @param bufferTransformer this transformer expected to open the file if the block is backed by a
@@ -984,6 +1064,8 @@ private[spark] class BlockManager(
 
   /**
    * Fetch the block from remote block managers as a ManagedBuffer.
+   *
+   * 同步获取Block数据，若fetch失败，继续从下一个location尝试，直到成功
    */
   private def fetchRemoteManagedBuffer(
       blockId: BlockId,
@@ -1166,6 +1248,11 @@ private[spark] class BlockManager(
    * Retrieve the given block if it exists, otherwise call the provided `makeIterator` method
    * to compute the block, persist it, and return its values.
    *
+   * {{{
+   * 1. get(blockId) 尝试从本地和远程获取Block数据
+   * 2. 尝试将makeIterator生成的数据进行Block缓存
+   * 3. 如果缓存成功，返回生成该Block Value的迭代器封装；缓存失败，直接返回 makeIterator迭代器
+   * }}}
    * @return either a BlockResult if the block was successfully cached, or an iterator if the block
    *         could not be cached.
    */

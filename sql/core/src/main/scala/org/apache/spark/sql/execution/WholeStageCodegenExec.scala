@@ -842,6 +842,20 @@ case class WholeStageCodegenExec(child: SparkPlan)(val codegenStageId: Int)
  * 0 is reserved as a special ID value to indicate a temporary WholeStageCodegenExec object
  * is created, e.g. for special fallback handling when an existing WholeStageCodegenExec
  * failed to generate/compile code.
+ *
+ * {{{
+ * 1. CodeGen 条件:
+ * 1.0 开启全局参数: spark.sql.codegen.wholeStage
+ * 1.1 Plan属于CodeGenSupport类型
+ * 1.2 当前节点的supportCodegen 属性为true
+ * 1.3 当前节点的expressions属性支持codegen
+ * 1.4 当前节点的输出schema字段个数小于100
+ * 1.5 所有输入子节点的schema字段个数小于100
+ * 1.6 不能支持columnar（codegen 和 columnar只能同时支持一个）
+ * 1.7 代码生成，返回 WholeStageCodegenExec(insertInputAdapter(plan))
+ *
+ *
+ * }}}
  */
 case class CollapseCodegenStages(
     conf: SQLConf,

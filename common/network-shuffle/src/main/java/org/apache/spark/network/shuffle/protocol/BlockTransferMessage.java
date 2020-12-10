@@ -39,6 +39,17 @@ import org.apache.spark.network.shuffle.protocol.mesos.ShuffleServiceHeartbeat;
  *   - RegisterExecutor is only handled by the external shuffle service.
  *   - RemoveBlocks is only handled by the external shuffle service.
  *   - FetchShuffleBlocks is handled by both services for shuffle files. It returns a StreamHandle.
+ *
+ * <p>
+ * 定义了12中shuffle使用的协议类型
+ * <ul>
+ *   <li>toByteBuffer(): 调用encode()函数将协议本身转换为ByteBuffer对象</li>
+ *   <li>encodedLength(): 协议消息编码后长度</li>
+ *   <li>encode(): 将消息编码到ByteBuf中</li>
+ *   <li>decode(): 从ByteBuf中解码出协议消息</li>
+ *   <li>type(): 协议枚举类型</li>
+ * </ul>
+ * </p>
  */
 public abstract class BlockTransferMessage implements Encodable {
   protected abstract Type type();

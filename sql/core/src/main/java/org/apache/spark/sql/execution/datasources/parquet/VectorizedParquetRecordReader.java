@@ -48,6 +48,14 @@ import org.apache.spark.sql.types.StructType;
  * This class can either return InternalRows or ColumnarBatches. With whole stage codegen
  * enabled, this class returns ColumnarBatches which offers significant performance gains.
  * TODO: make this always return ColumnarBatches.
+ *
+ * <pre>
+ * 1. reader 入口: nextKeyValue()
+ * 2. resultBatch() -> initBatch() : 数据内存空间初始化，包括数组的初始化，partition列数据的补充等
+ *      nextBatch()
+ *        checkEndOfRowGroup(): 调用parquet 包读取整个page数据
+ * </pre>
+ *
  */
 public class VectorizedParquetRecordReader extends SpecificParquetRecordReaderBase<Object> {
 

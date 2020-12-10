@@ -114,6 +114,13 @@ case class ParquetPartitionReaderFactory(
     }
   }
 
+  /**
+   * {{{
+   * 1. 读取文件MetaData信息，根据Factory中filters生成目标FilterPredicate，并注入到ParquetInputFormat中
+   * 2. 判断文件的读写模式，Spark3之后，parquet文件格式发生变化
+   * 3. 调用传入的函数，生成reader
+   * }}}
+   */
   private def buildReaderBase[T](
       file: PartitionedFile,
       buildReaderFunc: (
@@ -184,6 +191,12 @@ case class ParquetPartitionReaderFactory(
     buildReaderBase(file, createRowBaseParquetReader)
   }
 
+  /**
+   * {{{
+   * 1. parquetFilter: 移除pushed过滤器中所有not过滤器，再包装为FilterPredicateCompat对象
+   * 2. 根据readerSupport和filter创建ParquetRecordReader， 返回其迭代器
+   * }}}
+   */
   private def createRowBaseParquetReader(
       split: ParquetInputSplit,
       partitionValues: InternalRow,

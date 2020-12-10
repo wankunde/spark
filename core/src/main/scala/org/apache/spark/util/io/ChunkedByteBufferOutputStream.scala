@@ -27,6 +27,12 @@ import org.apache.spark.storage.StorageUtils
 /**
  * An OutputStream that writes to fixed-size chunks of byte arrays.
  *
+ * {{{
+ *   Stream转换为ChunkedByteBuffer工具类
+ *   Input Stream数据拷贝到当前Stream的实现是通过内部缓存的ByteBuffer(size=4M)来接收数据的
+ *   接收数据完毕后，将ByteBuffer封装为ChunkedByteBuffer即可
+ * }}}
+ *
  * @param chunkSize size of each chunk, in bytes.
  */
 private[spark] class ChunkedByteBufferOutputStream(

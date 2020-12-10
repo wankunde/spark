@@ -181,6 +181,13 @@ public class TransportClient implements Closeable {
    * Sends an opaque message to the RpcHandler on the server-side. The callback will be invoked
    * with the server's response or upon any failure.
    *
+   * {{{
+   *  1. 采用UUID后64位(Long类型)作为requestId
+   *  2. handler 注册request的callback
+   *  3. 发送封装的RpcRequest对象，并注册消息发送的Listener。
+   *     writeAndFlush方法返回ChannelFuture来监听消息发送结果；如果消息写入网络Socket失败，则Netty回调
+   *  handleFailure方法，移除handler中的request请求，并把错误传给callback的onFailure函数
+   * }}}
    * @param message The message to send.
    * @param callback Callback to handle the RPC's reply.
    * @return The RPC's id.

@@ -88,6 +88,12 @@ import org.apache.spark.util.{Utils => TryUtils}
  *    each other for equality to merge values.
  *
  *  - Users are expected to call stop() at the end to delete all the intermediate files.
+ *
+ *  {{{
+ *  isShuffleSort：当前iteraotor是否为shuffleSort，如果是，则不允许当前iterator被spill到磁盘用于是否内存空间
+ *    默认为true，如果数据需要进行map端聚合，使用的是map结构存储，则允许通过spill释放内存空间
+ *
+ *  }}}
  */
 private[spark] class ExternalSorter[K, V, C](
     context: TaskContext,
@@ -163,6 +169,12 @@ private[spark] class ExternalSorter[K, V, C](
   // Information about a spilled file. Includes sizes in bytes of "batches" written by the
   // serializer as we periodically reset its stream, as well as number of elements in each
   // partition, used to efficiently keep track of partitions when merging.
+  /**
+   * @param file /ONE_OF_YARN_LOCAL_DIR/blockmgr/ONE_OF_64SUBDIRS/${blockId}
+   * @param blockId temp_shuffle_806292c8-129f-4a02-9ffb-c4500c46f211
+   * @param serializerBatchSizes 每10000条记录进行一次flush生成一个FileSegment对象，这些Segment的Byte大小
+   * @param elementsPerPartition 每个parititon的记录数
+   */
   private[this] case class SpilledFile(
     file: File,
     blockId: BlockId,
@@ -234,6 +246,10 @@ private[spark] class ExternalSorter[K, V, C](
    * Spill our in-memory collection to a sorted file that we can merge later.
    * We add this file into `spilledFiles` to find it later.
    *
+   * {{{
+   *    1. 使用 TimSort 算法对内存数据进行排序
+   *    2. 调用 DiskBlockObjectWriter 将排序好的数据写入 SpilledFile 中
+   * }}}
    * @param collection whichever collection we're using (map or buffer)
    */
   override protected[this] def spill(collection: WritablePartitionedPairCollection[K, C]): Unit = {
@@ -262,6 +278,9 @@ private[spark] class ExternalSorter[K, V, C](
 
   /**
    * Spill contents of in-memory iterator to a temporary file on disk.
+   * {{{
+   *   将内存数据全部写入SpilledFile，每10000条记录flush一次
+   * }}}
    */
   private[this] def spillMemoryIteratorToDisk(inMemoryIterator: WritablePartitionedIterator)
       : SpilledFile = {
@@ -338,6 +357,14 @@ private[spark] class ExternalSorter[K, V, C](
    * partition we then have an iterator over its contents, and these are expected to be accessed
    * in order (you can't "skip ahead" to one partition without reading the previous one).
    * Guaranteed to return a key-value pair for each partition, in order of partition ID.
+   *
+   * {{{
+   *   1. 对磁盘Spill文件和内存中的数据进行merge合并，使用多路排序
+   *   2. 所有数据根据分区合并合并，每个分区返回自己的迭代器
+   *   3. 如果有比较器，会调用比较器对Key进行比较，这里输出的实际上就是全局排序
+   *   4. 如果reduce端还有combiner, 对于相同key的数据调用combiner:((k, v1), (k, v2)) => (k, func(v1,v2))
+   *   5. 否则直接将所有数据直接合并为一个新的迭代器
+   * }}}
    */
   private def merge(spills: Seq[SpilledFile], inMemory: Iterator[((Int, K), C)])
       : Iterator[(Int, Iterator[Product2[K, C]])] = {
@@ -473,6 +500,23 @@ private[spark] class ExternalSorter[K, V, C](
   /**
    * An internal class for reading a spilled file partition by partition. Expects all the
    * partitions to be requested in order.
+   *
+   * {{{
+   *  spill segments : |    100    |    120    |    130    |
+   *  batchOffsets   : |      0    |    100    |    220    |    350    |
+   *
+   *  def nextBatchStream():
+   *  fileStream(offset, length)
+   *    LimitedInputStream
+   *      BufferedInputStream
+   *        wrappedStream
+   *          DeserializationStream
+   *
+   *  def readNextItem():
+   *    1. indexInBatch 用于辅助判断Batch大小，以10000条为Batch进行数据读取
+   *    2. indexInPartition 用于辅助判断当前parititon的数据是否已经全部读取，读取完毕更新partition序号
+   *    3. 所有数据读完毕，关闭流
+   * }}}
    */
   private[this] class SpillReader(spill: SpilledFile) {
     // Serializer batch offsets; size will be batchSize.length + 1
@@ -577,6 +621,21 @@ private[spark] class ExternalSorter[K, V, C](
 
     var nextPartitionToRead = 0
 
+    /**
+     * 设计精巧，通过 (0 until numPartitions).iterator 上map调用该方法，就可以顺序更新 nextPartitionToRead
+     * 变量，返回迭代器集合。再对迭代器map一下, map(cur => ((p, cur._1), cur._2)) ，对这个迭代器集合顺序调用，
+     * 返回的就是 ((partition, key), value) 的迭代器数据了。
+     *
+     * 每个迭代器终止条件: 通过 skipToNextPartition() 函数对partitionId 进行更新，
+     * 对比 (lastPartitionId == partitionId) == myPartition(固定值)来判断当前分区数据是否已经读取完毕？
+     *
+     * 问题:
+     *   1. 是否通过partitionId直接来进行判断会更方便一点？
+     *   2. 不同迭代器只能顺序读，不能跳过分区进行数据读取啊？
+     *   3. 父方法更奇怪，要通过flatMap 来对迭代器进行合并，那我直接创建一个基于readNextItem()的全局迭代器不好吗？
+     *
+     * @return
+     */
     def readNextPartition(): Iterator[Product2[K, C]] = new Iterator[Product2[K, C]] {
       val myPartition = nextPartitionToRead
       nextPartitionToRead += 1
@@ -723,6 +782,12 @@ private[spark] class ExternalSorter[K, V, C](
    * Write all the data added into this ExternalSorter into a map output writer that pushes bytes
    * to some arbitrary backing store. This is called by the SortShuffleWriter.
    *
+   * {{{
+   *   1. 获取reduce及其对应迭代器的数据
+   *   2. 将所有分区数据写入最终结果文件中
+   *   3. 如果Shuffle数据没有Spill文件，直接将内存数据写入磁盘
+   * }}}
+   *
    * @return array of lengths, in bytes, of each partition of the file (used by map output tracker)
    */
   def writePartitionedMapOutput(
@@ -820,6 +885,11 @@ private[spark] class ExternalSorter[K, V, C](
    * An iterator that reads only the elements for a given partition ID from an underlying buffered
    * stream, assuming this partition is the next one to be read. Used to make it easier to return
    * partitioned iterators from our in-memory collection.
+   *
+   * {{{
+   *   因为ON_DISK数据可以按Partition进行数据读取，所以封装了一个工具类，支持迭代读取指定parititon数据
+   *   因为在merge的时候，内存中的数据已经调用Sort进行排序，所以结果可以按分区顺序迭代读取
+   * }}}
    */
   private[this] class IteratorForPartition(partitionId: Int, data: BufferedIterator[((Int, K), C)])
     extends Iterator[Product2[K, C]]
@@ -835,6 +905,17 @@ private[spark] class ExternalSorter[K, V, C](
     }
   }
 
+  /**
+   * {{{
+   *   1. call spill(): 对upstream 数据spill到磁盘，再创建一个基于磁盘文件的reader的数据读取迭代器
+   *   2. hasNext() 判断数据数据是否为空
+   *   3. 当然，如果不调用spill()，完全不影响iterator的正常使用
+   *
+   *   readNext() 方法如果先于spill方法调用，虽然数据正常，但是对象实例化后调用spill，upStream spill到磁盘的数据
+   *   会少一个啊？
+   * }}}
+   * @param upstream
+   */
   private[this] class SpillableIterator(var upstream: Iterator[((Int, K), C)])
     extends Iterator[((Int, K), C)] {
 

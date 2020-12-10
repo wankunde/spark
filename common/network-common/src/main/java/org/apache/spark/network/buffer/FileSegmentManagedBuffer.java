@@ -56,6 +56,13 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
     return length;
   }
 
+  /**
+   * 如果Data length小于2M，直接映射读取文件内容到新的ByteBuffer
+   * 如果Data length大于2M，映射文件的offset和length到ByteBuffer进行数据读取
+   *
+   * @return
+   * @throws IOException
+   */
   @Override
   public ByteBuffer nioByteBuffer() throws IOException {
     FileChannel channel = null;
@@ -93,6 +100,11 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
     }
   }
 
+    /**
+     * 创建文件的输入流，返回(offset, length)数据的InputStream
+     * @return
+     * @throws IOException
+     */
   @Override
   public InputStream createInputStream() throws IOException {
     FileInputStream is = null;

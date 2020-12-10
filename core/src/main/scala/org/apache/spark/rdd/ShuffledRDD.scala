@@ -99,6 +99,15 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     tracker.getPreferredLocationsForShuffle(dep, partition.index)
   }
 
+  /**
+   * {{{
+   * 1. 对于Reduce Task，内部的RDD就是用于读取远程Shuffle结果
+   * 2. ShuffleDependency的shuffleHandle在Driver端的Shuffle Map时就确定了
+   * }}}
+   * @param split
+   * @param context
+   * @return
+   */
   override def compute(split: Partition, context: TaskContext): Iterator[(K, C)] = {
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
     val metrics = context.taskMetrics().createTempShuffleReadMetrics()

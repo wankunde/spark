@@ -279,6 +279,25 @@ final class ShuffleBlockFetcherIterator(
     }
   }
 
+  /**
+   * {{{
+   *   blocksByAddress {
+   *     BlockManagerId1 -> { ((ShuffleBlockId(1, mapId=0, reduceId=1), 8, mapIndex=0)) },
+   *     BlockManagerId2 -> { ((ShuffleBlockId(1, mapId=1, reduceId=1), 5, mapIndex=1)) }
+   *   }
+   * 将Block分为三类，
+   * 1. Block是当前BlockManager管理的Block，支持合并读取Block
+   * 2. Block在当前BlockManager所在机器，支持合并读取Block
+   * 3. Block在远端机器上，将block分为N组 FetchRequest，预备后续请求
+   * |                 |  Local BM          |      Local HOST     |      Remote        |
+   * |    BlockNumber  |  localBlocks       |   hostLocalBlocks   |  numRemoteBlocks   |
+   * |       Bytes     |  localBlockBytes   | hostLocalBlockBytes |  remoteBlockBytes  |
+   * |numBlocksToFetch |         +          |         +           |         +          |
+   *
+   * 1. fetch local block
+   * 1.1 将数据转换为FetchBlockInfo对象，并将有可能合并获取的Block，合并为ShuffleBlockBatchId，例如
+   * }}}
+   */
   private[this] def partitionBlocksByFetchMode(): ArrayBuffer[FetchRequest] = {
     logDebug(s"maxBytesInFlight: $maxBytesInFlight, targetRemoteRequestSize: "
       + s"$targetRemoteRequestSize, maxBlocksInFlightPerAddress: $maxBlocksInFlightPerAddress")
@@ -337,6 +356,22 @@ final class ShuffleBlockFetcherIterator(
     FetchRequest(address, blocks)
   }
 
+  /**
+   * {{{
+   * 当前机器上需要获取的Block太多，这些Block安装maxBlocksInFlightPerAddress 个一组，分为多次进行请求
+   * eg:
+   *   maxBlocksInFlightPerAddress = 3
+   * case 1:
+   *   mergedBlocks { b1, b2, b3 }
+   *   collectedRemoteRequests += FetchRequest(loc1, { b1, b2, b3 })
+   *
+   * case 2:
+   *   mergedBlocks { b1, b2, b3, b4, b5, b6, b7}
+   *   collectedRemoteRequests += FetchRequest(loc1, { b1, b2, b3 })
+   *   collectedRemoteRequests += FetchRequest(loc1, { b4, b5, b6 })
+   * 判断当前分租是否为最后一次，如果是最后一次，则剩余的Block单独分为一次请求，否则参与下一轮的分组计算return { b7 }
+   * }}}
+   */
   private def createFetchRequests(
       curBlocks: Seq[FetchBlockInfo],
       address: BlockManagerId,
@@ -362,6 +397,14 @@ final class ShuffleBlockFetcherIterator(
     retBlocks
   }
 
+  /**
+   * {{{
+   * 对于同一个BM上的Blocks进行分组进行请求，返回请求序列
+   * }}}
+   * @param address
+   * @param blockInfos
+   * @param collectedRemoteRequests
+   */
   private def collectFetchRequests(
       address: BlockManagerId,
       blockInfos: Seq[(BlockId, Long, Int)],
@@ -678,6 +721,12 @@ final class ShuffleBlockFetcherIterator(
         detectCorrupt && streamCompressedOrEncrypted))
   }
 
+  /**
+   * {{{
+   *   在自身迭代器执行完毕后，执行ShuffleBlockFetcherIterator 的cleanup函数。
+   * }}}
+   * @return
+   */
   def toCompletionIterator: Iterator[(BlockId, InputStream)] = {
     CompletionIterator[(BlockId, InputStream), this.type](this,
       onCompleteCallback.onComplete(context))
