@@ -880,6 +880,13 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val THRIFTSERVER_COLLECT_ROWS_LIMIT =
+    buildConf("spark.sql.thriftServer.collectRowsLimit")
+      .internal()
+      .doc("Thrift Server could collect max rows for each query. -1 means no limit.")
+      .intConf
+      .createWithDefault(1000000)
+
   val THRIFTSERVER_UI_STATEMENT_LIMIT =
     buildConf("spark.sql.thriftserver.ui.retainedStatements")
       .doc("The number of SQL statements kept in the JDBC/ODBC web UI history.")

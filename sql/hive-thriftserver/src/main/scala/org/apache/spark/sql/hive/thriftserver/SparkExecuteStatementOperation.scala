@@ -128,7 +128,13 @@ private[hive] class SparkExecuteStatementOperation(
         result.toLocalIterator.asScala
       } else {
         if (resultList.isEmpty) {
-          resultList = Some(result.collect())
+          val collectRowsLimit =
+            sqlContext.getConf(SQLConf.THRIFTSERVER_COLLECT_ROWS_LIMIT.key).toInt
+          resultList = if (collectRowsLimit > 0) {
+            Some(result.take(collectRowsLimit))
+          } else {
+            Some(result.collect())
+          }
         }
         resultList.get.iterator
       }
@@ -286,7 +292,13 @@ private[hive] class SparkExecuteStatementOperation(
           resultList = None
           result.toLocalIterator.asScala
         } else {
-          resultList = Some(result.collect())
+          val collectRowsLimit =
+            sqlContext.getConf(SQLConf.THRIFTSERVER_COLLECT_ROWS_LIMIT.key).toInt
+          resultList = if (collectRowsLimit > 0) {
+            Some(result.take(collectRowsLimit))
+          } else {
+            Some(result.collect())
+          }
           resultList.get.iterator
         }
       }
