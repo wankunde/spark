@@ -10,3 +10,9 @@ release-jar:
     - docker
   script:
     - publish_jar.py
+
+make-distribution:
+  script: ./dev/make-distribution.sh --name leyan --tgz -DskipTests -Phive -Phive-thriftserver -Pyarn -Pcdhhive
+
+install-to-local:
+  script: mvn clean install -DskipTests=true -Pcdhhive -Phive-thriftserver -Pyarn

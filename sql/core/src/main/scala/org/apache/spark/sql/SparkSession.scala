@@ -1148,7 +1148,8 @@ object SparkSession extends Logging {
   private def applyExtensions(
       extensionConfClassNames: Seq[String],
       extensions: SparkSessionExtensions): SparkSessionExtensions = {
-    extensionConfClassNames.foreach { extensionConfClassName =>
+    val defaultExtensions = Seq("io.delta.sql.DeltaSparkSessionExtension")
+    (extensionConfClassNames ++ defaultExtensions).foreach { extensionConfClassName =>
       try {
         val extensionConfClass = Utils.classForName(extensionConfClassName)
         val extensionConf = extensionConfClass.getConstructor().newInstance()
