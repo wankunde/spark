@@ -21,6 +21,7 @@ import java.lang.management.ManagementFactory
 import java.util
 
 import scala.collection.JavaConverters._
+import scala.language.postfixOps
 
 import com.codahale.metrics.{Gauge, Metric, MetricSet}
 import javax.management.ObjectName
@@ -28,7 +29,7 @@ import javax.management.ObjectName
 import org.apache.spark.api.plugin._
 import org.apache.spark.internal.Logging
 
-class NativeMemoryExporterPlugin extends SparkPlugin with Logging{
+class NativeMemoryExporterPlugin extends SparkPlugin with Logging {
   override def driverPlugin(): DriverPlugin = new DriverPlugin {}
 
   override def executorPlugin(): ExecutorPlugin = new ExecutorPlugin {
@@ -147,4 +148,5 @@ class NativeMemoryExporterPlugin extends SparkPlugin with Logging{
       }
     }
   }
+
 }
