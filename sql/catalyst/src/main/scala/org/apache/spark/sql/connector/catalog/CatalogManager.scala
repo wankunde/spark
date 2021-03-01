@@ -33,6 +33,30 @@ import org.apache.spark.sql.internal.SQLConf
  * ignore the current catalog and blindly go to the v1 `SessionCatalog`. To avoid tracking current
  * namespace in both `SessionCatalog` and `CatalogManger`, we let `CatalogManager` to set/get
  * current database of `SessionCatalog` when the current catalog is the session catalog.
+ *
+ * {{{
+ * 背景:
+ * 在spark2 中已经有了一套spark catalog的设计，通过参数 spark.sql.catalogImplementation 指定要使用的catalog
+ * 默认有2种catalog: in-memory 和 hive。
+ * SparkSession.enableHiveSupport() 判断如果spark运行环境中存在hive包，会自动设置catalog为hive用于访问hive metastore
+ *
+ * Spark3 catalog设计:
+ * 1 BaseSessionStateBuilder 中初始化
+ * val v2SessionCatalog = new V2SessionCatalog(catalog, conf)
+ * val catalogManager = new CatalogManager(conf, v2SessionCatalog, catalog) // 该变量会传递给内部的 analyzer
+ * 2 HiveSessionStateBuilder 中切换catalog为HiveSessionCatalog
+ * 3. Analyzer 继承 LookupCatalog，LookupCatalog 中引用了 CatalogManager.currentCatalog 进行管理
+ * 4. currentCatalog 表示当前正在使用的catalog, 默认为 spark_catalog, 通过setCurrentCatalog() 方法实现自定义
+ * 5. 如果catalog名字为spark_catalog, 返回 v2SessionCatalog
+ * 6. v2SessionCatalog 先判断 spark.sql.catalog.spark_catalog是否有被覆盖，默认为空，此时返回属性 defaultSessionCatalog
+ * 7. 如果6中有自定义catalog，调用函数 loadV2SessionCatalog() 进行加载和初始化
+ *
+ * DeltaCatalog
+ * 通过实现 CatalogExtension接口，可以轻松的对catalog的操作进行aop切面，例如createTable() 方法如果provider是delta会
+ * 直接代理执行createDeltaTable 方法，该方法会执行 CreateDeltaTableCommand 命令内部实际上已经开始执行delta transaction了，
+ * 也就是会产出对应的数据目录和日志
+ * }}}
+ *
  */
 // TODO: all commands should look up table from the current catalog. The `SessionCatalog` doesn't
 //       need to track current database at all.

@@ -97,6 +97,11 @@ class QueryExecution(
 
   // executedPlan should not be used to initialize any SparkPlan. It should be
   // only used for execution.
+  /**
+   * {{{
+   * 物理执行计划生成: 依次应用 preparations 中的所有Rule，包括 adaptiveExecutionRule 和 常规Rule
+   * }}}
+   */
   lazy val executedPlan: SparkPlan = {
     // We need to materialize the optimizedPlan here, before tracking the planning phase, to ensure
     // that the optimization time is not counted as part of the planning phase.

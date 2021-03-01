@@ -146,6 +146,7 @@ case class AdaptiveSparkPlanExec(
   }
 
   private def getFinalPhysicalPlan(): SparkPlan = lock.synchronized {
+    // 第一次调用 getFinalPhysicalPlan方法时为false，等待该方法执行完毕，全部Stage不会再改变，直接返回最终plan
     if (isFinalPlan) return currentPhysicalPlan
 
     // In case of this adaptive plan being executed out of `withActive` scoped functions, e.g.,
@@ -160,13 +161,19 @@ case class AdaptiveSparkPlanExec(
       var stagesToReplace = Seq.empty[QueryStageExec]
       while (!result.allChildStagesMaterialized) {
         currentPhysicalPlan = result.newPlan
+        // 接下来有哪些Stage要执行，参考 createQueryStages(plan: SparkPlan) 方法
         if (result.newStages.nonEmpty) {
           stagesToReplace = result.newStages ++ stagesToReplace
+          // onUpdatePlan 通过listener更新UI
           executionId.foreach(onUpdatePlan(_, result.newStages.map(_.plan)))
 
           // Start materialization of all new stages and fail fast if any stages failed eagerly
           result.newStages.foreach { stage =>
             try {
+              // materialize() 方法对Stage的作为一个单独的Job提交执行，并返回 SimpleFutureAction 来接收执行结果
+              // QueryStageExec: materialize() -> doMaterialize() ->
+              // ShuffleExchangeExec: -> mapOutputStatisticsFuture -> ShuffleExchangeExec
+              // SparkContext: -> submitMapStage(shuffleDependency)
               stage.materialize().onComplete { res =>
                 if (res.isSuccess) {
                   events.offer(StageSuccess(stage, res.get))
@@ -184,6 +191,7 @@ case class AdaptiveSparkPlanExec(
         // Wait on the next completed stage, which indicates new stats are available and probably
         // new stages can be created. There might be other stages that finish at around the same
         // time, so we process those stages too in order to reduce re-planning.
+        // 等待，直到有Stage执行完毕
         val nextMsg = events.take()
         val rem = new util.ArrayList[StageMaterializationEvent]()
         events.drainTo(rem)
@@ -210,7 +218,9 @@ case class AdaptiveSparkPlanExec(
         // the current physical plan. Once a new plan is adopted and both logical and physical
         // plans are updated, we can clear the query stage list because at this point the two plans
         // are semantically and physically in sync again.
+        // 对前面的Stage替换为 LogicalQueryStage 节点
         val logicalPlan = replaceWithQueryStagesInLogicalPlan(currentLogicalPlan, stagesToReplace)
+        // 再次调用optimizer 和planner 进行优化
         val (newPhysicalPlan, newLogicalPlan) = reOptimize(logicalPlan)
         val origCost = costEvaluator.evaluateCost(currentPhysicalPlan)
         val newCost = costEvaluator.evaluateCost(newPhysicalPlan)
@@ -223,10 +233,12 @@ case class AdaptiveSparkPlanExec(
           stagesToReplace = Seq.empty[QueryStageExec]
         }
         // Now that some stages have finished, we can try creating new stages.
+        // 进入下一轮循环，如果存在Stage执行完毕， 对应的resultOption 会有值，对应的allChildStagesMaterialized 属性 = true
         result = createQueryStages(currentPhysicalPlan)
       }
 
       // Run the final plan when there's no more unfinished stages.
+      // 所有前置stage全部执行完毕，根据stats信息优化物理执行计划，确定最终的 physical plan
       currentPhysicalPlan = applyPhysicalRules(result.newPlan, queryStageOptimizerRules)
       isFinalPlan = true
       executionId.foreach(onUpdatePlan(_, Seq(currentPhysicalPlan)))
