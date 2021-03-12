@@ -281,6 +281,8 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
    * Produces the result of the query as an `RDD[InternalRow]`
    *
    * Overridden by concrete implementations of SparkPlan.
+   *
+   * {{{ 负责具体的计算，由各个Exec算子具体实现 }}}
    */
   protected def doExecute(): RDD[InternalRow]
 

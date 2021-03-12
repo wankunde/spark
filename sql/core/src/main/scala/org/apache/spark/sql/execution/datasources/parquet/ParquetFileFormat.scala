@@ -201,6 +201,8 @@ class ParquetFileFormat
       filters: Seq[Filter],
       options: Map[String, String],
       hadoopConf: Configuration): (PartitionedFile) => Iterator[InternalRow] = {
+    // 下面很长一大段都是在设置读取Parquet相关参数，无关主程序逻辑，不过都是有用的，有需要的时候可以看一下
+    // ParquetReadSupport 做一些spark和parquet的shcema转化已经数据类型转换的工作
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
     hadoopConf.set(
       ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
@@ -241,6 +243,8 @@ class ParquetFileFormat
       sqlConf.parquetVectorizedReaderEnabled &&
       resultSchema.forall(_.dataType.isInstanceOf[AtomicType])
     val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
+
+    // spark.sql.parquet.int96TimestampConversion 这个参数只是用于做数据类型的兼容性转换，无法做到Filter下推的类型转换
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
     val enableParquetFilterPushDown: Boolean = sqlConf.parquetFilterPushDown
@@ -253,9 +257,11 @@ class ParquetFileFormat
     val pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold
     val isCaseSensitive = sqlConf.caseSensitiveAnalysis
 
+    // 这个就是方法的返回对象了，根据创建的file，返回reader的迭代器
     (file: PartitionedFile) => {
       assert(file.partitionValues.numFields == partitionSchema.size)
 
+      // 所有Parquet的文件读取，都封装成一个ParquetInputSplit进行操作
       val filePath = new Path(new URI(file.filePath))
       val split =
         new org.apache.parquet.hadoop.ParquetInputSplit(
@@ -279,6 +285,10 @@ class ParquetFileFormat
           // Collects all converted Parquet filter predicates. Notice that not all predicates can be
           // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
           // is used here.
+          // 这里尝试将SparkPlan的Filter转换为Parquet的Filter，
+          // 1. parquetFilters本身可以控制是否对date，timestamp等类型进行转换
+          // 2. 像timestamp在当前版本的parquet中存储格式为INT96, 目前还不支持转换
+          // 3. 最后剩余的filter就是下推到parquet文件上的filter
           .flatMap(parquetFilters.createFilter(_))
           .reduceOption(FilterApi.and)
       } else {
@@ -311,10 +321,13 @@ class ParquetFileFormat
       // Try to push down filters when filter push-down is enabled.
       // Notice: This push-down is RowGroups level, not individual records.
       if (pushed.isDefined) {
+        // 如果存在可以文件下推的filter，直接设置到hadoop config参数中:
+        // FILTER_PREDICATE = "parquet.private.read.filter.predicate"
         ParquetInputFormat.setFilterPredicate(hadoopAttemptContext.getConfiguration, pushed.get)
       }
       val taskContext = Option(TaskContext.get())
       if (enableVectorizedReader) {
+        // 这里创建reader，并将reader封装为一个常规的iterator，没什么特殊的
         val vectorizedReader = new VectorizedParquetRecordReader(
           convertTz.orNull,
           datetimeRebaseMode.toString,
