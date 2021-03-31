@@ -44,6 +44,15 @@ case class PlanDynamicPruningFilters(sparkSession: SparkSession)
     HashedRelationBroadcastMode(packedKeys)
   }
 
+  /**
+   * {{{
+   *   数据处理逻辑:
+   *   1. case DynamicPruningSubquery
+   *   2. 如果当前Plan中存在BroadcastHashJoinExec，且BroadcastHashJoinExec的build side就是上面的 buildPlan, canReuseExchange = true
+   *   3. 创建BroadcastExchangeExec(mode, QueryExecution.prepareExecutedPlan(sparkSession, QueryExecution.createSparkPlan(buildPlan))) 对象
+   *   4. 创建 InSubqueryExec(value, broadcastValues, exprId)对象
+   * }}}
+   */
   override def apply(plan: SparkPlan): SparkPlan = {
     if (!SQLConf.get.dynamicPartitionPruningEnabled) {
       return plan

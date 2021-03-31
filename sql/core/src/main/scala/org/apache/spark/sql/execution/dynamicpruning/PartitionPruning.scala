@@ -52,7 +52,10 @@ object PartitionPruning extends Rule[LogicalPlan] with PredicateHelper {
    * Search the partitioned table scan for a given partition column in a logical plan
    */
   def getPartitionTableScan(a: Expression, plan: LogicalPlan): Option[LogicalRelation] = {
+    // 迭代找plan的自节点，返回a 和 a属性来自的leafNode
     val srcInfo: Option[(Expression, LogicalPlan)] = findExpressionAndTrackLineageDown(a, plan)
+    // leafNode如果是 LogicalRelation(fs: HadoopFsRelation, _), 取 fs的所有分区字段
+    // 如果a的属性为分区字段的子集，返回leafNode，否则返回None
     srcInfo.flatMap {
       case (resExp, l: LogicalRelation) =>
         l.relation match {
@@ -78,6 +81,8 @@ object PartitionPruning extends Rule[LogicalPlan] with PredicateHelper {
    *  - we also insert a flag that indicates if the subquery duplication is worthwhile and it
    *  should run regardless of the join strategy, or is too expensive and it should be run only if
    *  we can reuse the results of a broadcast
+   *
+   *  {{{ 具体负责插入DPP Filter}}}
    */
   private def insertPredicate(
       pruningKey: Expression,
@@ -110,6 +115,7 @@ object PartitionPruning extends Rule[LogicalPlan] with PredicateHelper {
    * in bytes of the plan on the other side of the join. We estimate the filtering ratio
    * using column statistics if they are available, otherwise we use the config value of
    * `spark.sql.optimizer.joinFilterRatio`.
+   * {{{ 主要是通过CBO分析，在进行prune后的代价是否足够的优化，不满足阀值，则禁止该分区下推 }}}
    */
   private def pruningHasBenefit(
       partExpr: Expression,
@@ -199,6 +205,7 @@ object PartitionPruning extends Rule[LogicalPlan] with PredicateHelper {
   private def prune(plan: LogicalPlan): LogicalPlan = {
     plan transformUp {
       // skip this rule if there's already a DPP subquery on the LHS of a join
+      // 1. skip已经存在DPP的join
       case j @ Join(Filter(_: DynamicPruningSubquery, _), _, _, _, _) => j
       case j @ Join(_, Filter(_: DynamicPruningSubquery, _), _, _, _) => j
       case j @ Join(left, right, joinType, Some(condition), hint) =>
@@ -206,6 +213,7 @@ object PartitionPruning extends Rule[LogicalPlan] with PredicateHelper {
         var newRight = right
 
         // extract the left and right keys of the join condition
+        // 2. 解析出join条件的keys
         val (leftKeys, rightKeys) = j match {
           case ExtractEquiJoinKeys(_, lkeys, rkeys, _, _, _, _) => (lkeys, rkeys)
           case _ => (Nil, Nil)
@@ -219,7 +227,9 @@ object PartitionPruning extends Rule[LogicalPlan] with PredicateHelper {
           fromLeftRight(x, y) || fromLeftRight(y, x)
         }
 
+        // 将join条件中的AND拆分为 Seq[Expression]，然后遍历处理每个join condition expression
         splitConjunctivePredicates(condition).foreach {
+          // 过滤Expression: EqualTo条件类型且EqualTo的两边属性分别属于join的左右表
           case EqualTo(a: Expression, b: Expression)
               if fromDifferentSides(a, b) =>
             val (l, r) = if (a.references.subsetOf(left.outputSet) &&
@@ -231,6 +241,7 @@ object PartitionPruning extends Rule[LogicalPlan] with PredicateHelper {
 
             // there should be a partitioned table and a filter on the dimension table,
             // otherwise the pruning will not trigger
+            // partScan 为根据join条件解析得到的leafNode，也就是分区表Relation对象
             var partScan = getPartitionTableScan(l, left)
             if (partScan.isDefined && canPruneLeft(joinType) &&
                 hasPartitionPruningFilter(right)) {
