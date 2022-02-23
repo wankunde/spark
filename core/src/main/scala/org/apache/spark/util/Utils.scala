@@ -2642,6 +2642,10 @@ private[spark] object Utils extends Logging {
   }
 
   /**
+   * 检查是否可以使用PushBasedShuffle
+   *   - 在Yarn模式并开启 external shuffle service
+   *   - 关闭IO加密
+   *   - serializer 支持 serialized object 的 relocation
    * Push based shuffle can only be enabled when below conditions are met:
    *   - the application is submitted to run in YARN mode
    *   - external shuffle service enabled
