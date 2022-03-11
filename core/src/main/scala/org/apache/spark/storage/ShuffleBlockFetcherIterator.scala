@@ -255,6 +255,10 @@ final class ShuffleBlockFetcherIterator(
     }
   }
 
+  /**
+   * shuffleClient.fetchBlocks() 根据 req 中的 host, port, executorId, blockIds 属性去Fetch Blocks
+   * @param req
+   */
   private[this] def sendRequest(req: FetchRequest): Unit = {
     logDebug("Sending request for %d blocks (%s) from %s".format(
       req.blocks.size, Utils.bytesToString(req.size), req.address.hostPort))
@@ -281,6 +285,12 @@ final class ShuffleBlockFetcherIterator(
       }
     }
 
+    /**
+     * 这里Listener在没有DownloadFileManager 时使用，直接将Buffer 放到
+     * results = new LinkedBlockingQueue[FetchResult] 中
+     * 使用 DownloadCallback 方式获取到的临时文件会被包装成 FileSegmentManagedBuffer 对象，回调进行注册
+     * 当前Fetcher 本身就是一个Iterator, 上面的节点在调用 next 方法时，依次从 result 内存中读取出数据即可
+     */
     val blockFetchingListener = new BlockFetchingListener {
       override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
@@ -397,6 +407,7 @@ final class ShuffleBlockFetcherIterator(
           pushMergedLocalBlocks ++= blockInfos.map(_._1)
           pushMergedLocalBlockBytes += blockInfos.map(_._2).sum
         } else {
+          // 这里直接去 Fetch remote block 数据
           collectFetchRequests(address, blockInfos, collectedRemoteRequests)
         }
       } else if (localExecIds.contains(address.executorId)) {
@@ -507,6 +518,8 @@ final class ShuffleBlockFetcherIterator(
             curRequestSize = curBlocks.map(_.size).sum
           }
         case ShuffleMergedBlockId(_, _, _) =>
+          // 在这里并没有看出来会对 ShuffleMergedBlockId 做什么特殊处理
+          // "shuffleMerged_" + shuffleId + "_" + shuffleMergeId + "_" + reduceId
           if (curBlocks.size >= maxBlocksInFlightPerAddress) {
             curBlocks = createFetchRequests(curBlocks.toSeq, address, isLast = false,
               collectedRemoteRequests, enableBatchFetch = false, forMergedMetas = true)
@@ -1085,6 +1098,9 @@ final class ShuffleBlockFetcherIterator(
       onCompleteCallback.onComplete(context))
   }
 
+  /**
+   * 这里发送request请求
+   */
   private def fetchUpToMaxBytes(): Unit = {
     if (isNettyOOMOnShuffle.get()) {
       if (reqsInFlight > 0) {

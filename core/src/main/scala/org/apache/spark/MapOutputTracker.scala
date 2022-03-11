@@ -81,6 +81,7 @@ private class ShuffleStatus(
   }
 
   /**
+   * 原始 MapStatus Array, 下标是 Map Id
    * MapStatus for each partition. The index of the array is the map partition id.
    * Each value in the array is the MapStatus for a partition, or null if the partition
    * is not available. Even though in theory a task may run multiple times (due to speculation,
@@ -97,6 +98,7 @@ private class ShuffleStatus(
   val mapStatusesDeleted = new Array[MapStatus](numPartitions)
 
   /**
+   * Merged Status Array，下标是 Reduce Id
    * MergeStatus for each shuffle partition when push-based shuffle is enabled. The index of the
    * array is the shuffle partition id (reduce id). Each value in the array is the MergeStatus for
    * a shuffle partition, or null if not available. When push-based shuffle is enabled, this array
@@ -675,6 +677,7 @@ private[spark] class MapOutputTrackerMaster(
   // HashMap for storing shuffleStatuses in the driver.
   // Statuses are dropped only by explicit de-registering.
   // Exposed for testing
+  // Key: ShuffleId, Value: Shuffle Stage Status
   val shuffleStatuses = new ConcurrentHashMap[Int, ShuffleStatus]().asScala
 
   private val maxRpcMessageSize = RpcUtils.maxMessageSizeBytes(conf)
@@ -990,6 +993,8 @@ private[spark] class MapOutputTrackerMaster(
   }
 
   /**
+   * Reduce Locality，根据dep.shuffleId 和 reduceId 选择MergedStatus, 如果 MergedStatus 含有超过 20% 的
+   * Map Task结果，就使用 Locality
    * Return the preferred hosts on which to run the given map output partition in a given shuffle,
    * i.e. the nodes that the most outputs for that partition are on. If the map output is
    * pre-merged, then return the node where the merged block is located if the merge ratio is
@@ -1588,6 +1593,15 @@ private[spark] object MapOutputTracker extends Logging {
    * @return A sequence of 2-item tuples, where the first item in the tuple is a BlockManagerId,
    *         and the second item is a sequence of (shuffle block id, shuffle block size, map index)
    *         tuples describing the shuffle blocks that are stored at that block manager.
+   */
+
+  /**
+   * 这个方法写的太绕了。
+   * 1. 从 startPartition 到 endPartition 依次循环
+   * 2. 对指定的 partId(reduceId) 如果存在 mergeStatus 优先使用这个mergeStatus, 在 splitsByAddress 放入
+   * (ShuffleMergedBlockId(shuffleId, mergeStatus.shuffleMergeId, partId), mergeStatus.totalSize, SHUFFLE_PUSH_MAP_ID)
+   * 3. 对 remainingMapStatuses 在 splitsByAddress 放入 (ShuffleBlockId(shuffleId, mapStatus.mapId, partId), size, mapIndex)
+   * 4. 返回结果的包装对象: Iterator[(BlockManagerId, Seq[(BlockId, Long, Int)])]
    */
   def convertMapStatuses(
       shuffleId: Int,

@@ -132,6 +132,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
     val baseShuffleHandle = handle.asInstanceOf[BaseShuffleHandle[K, _, C]]
     val (blocksByAddress, canEnableBatchFetch) =
       if (baseShuffleHandle.dependency.isShuffleMergeFinalizedMarked) {
+        // MapStage 被标示为 Finalized 启用 PushBased Shuffle Reader
+        // res.iter: Iterator[(BlockManagerId, Seq[(BlockId, Long, Int)])]
         val res = SparkEnv.get.mapOutputTracker.getPushBasedShuffleMapSizesByExecutorId(
           handle.shuffleId, startMapIndex, endMapIndex, startPartition, endPartition)
         (res.iter, res.enableBatchFetch)

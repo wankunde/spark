@@ -88,6 +88,7 @@ public class TransportFrameDecoder extends ChannelInboundHandlerAdapter {
           assert !first.isReadable() : "Interceptor still active but buffer has data.";
         }
 
+        // So, first.readableBytes() == 0 --> remove this buf
         int read = available - first.readableBytes();
         if (read == available) {
           buffers.removeFirst().release();

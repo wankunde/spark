@@ -226,15 +226,17 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
       }
     } else if (message instanceof StreamResponse) {
       StreamResponse resp = (StreamResponse) message;
-      Pair<String, StreamCallback> entry = streamCallbacks.poll();
+      Pair<String, StreamCallback> entry = streamCallbacks.poll();  // <StreamId, CallBack>
       if (entry != null) {
         StreamCallback callback = entry.getValue();
         if (resp.byteCount > 0) {
+          // TODO here resp.streamId =!= entry.StreamId ???
           StreamInterceptor<ResponseMessage> interceptor = new StreamInterceptor<>(
             this, resp.streamId, resp.byteCount, callback);
           try {
             TransportFrameDecoder frameDecoder = (TransportFrameDecoder)
               channel.pipeline().get(TransportFrameDecoder.HANDLER_NAME);
+            // 这里注册了Interceptor，buf 在这里会被消费
             frameDecoder.setInterceptor(interceptor);
             streamActive = true;
           } catch (Exception e) {

@@ -117,6 +117,10 @@ private[spark] class NettyBlockTransferService(
     }
     try {
       val maxRetries = transportConf.maxIORetries()
+      // 这里是写的太绕了，干掉 blockFetchStarter 代码会好读很多。核心就2句，创建连接 client,
+      // 然后使用 OneForOneBlockFetcher 去读数据， 然后通过 fetchBlocks(..listener..) 消费
+      // 比如从 ShuffleBlockFetcherIterator 过来的，就会调用内部的listener 缓存Buf 等待迭代器消费
+      // 读数据临时文件管理:
       val blockFetchStarter = new RetryingBlockTransferor.BlockTransferStarter {
         override def createAndStart(blockIds: Array[String],
             listener: BlockTransferListener): Unit = {

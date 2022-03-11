@@ -98,6 +98,8 @@ private class PushBasedFetchHelper(
   }
 
   /**
+   * 这里是已经通过RPC拿到 Meta 之后，构建新的 ShuffleBlockChunkId, 这样后续对这种BlockID 特殊处理就可以了
+   *
    * This is executed by the task thread when the `iterator.next()` is invoked and the iterator
    * processes a response of type [[ShuffleBlockFetcherIterator.PushMergedRemoteMetaFetchResult]].
    *
@@ -126,6 +128,9 @@ private class PushBasedFetchHelper(
   }
 
   /**
+   * 1. 根据 req.blocks.blockId: Seq[ShuffleMergedBlockId] 获取 meta信息
+   * 2. 将RPC 返回的 PushMergedRemoteMetaFetchResult 存储到 iterator 中等待 next() 消费
+   *
    * This is executed by the task thread when the iterator is initialized and only if it has
    * push-merged blocks for which it needs to fetch the metadata.
    *

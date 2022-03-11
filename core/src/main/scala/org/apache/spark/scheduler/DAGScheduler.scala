@@ -1669,6 +1669,10 @@ private[spark] class DAGScheduler(
     }
   }
 
+  /**
+   * 1. 判断是否要调度 finalize
+   * 2. 对于 isIndeterminate stage 或者 totalSize < threshold 调度 task delay = 0
+   */
   private[scheduler] def checkAndScheduleShuffleMergeFinalize(
       shuffleStage: ShuffleMapStage): Unit = {
     // Check if a finalize task has already been scheduled. This is to prevent scenarios
@@ -1834,6 +1838,8 @@ private[spark] class DAGScheduler(
             }
 
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingPartitions.isEmpty) {
+              // All Map Tasks finished(pendingPartitions is empty)
+              // 且 shuffleDep.getMergerLocs 非空，调度 Finalize Task
               if (!shuffleStage.shuffleDep.isShuffleMergeFinalizedMarked &&
                 shuffleStage.shuffleDep.getMergerLocs.nonEmpty) {
                 checkAndScheduleShuffleMergeFinalize(shuffleStage)
@@ -2203,6 +2209,9 @@ private[spark] class DAGScheduler(
   }
 
   /**
+   * 创建一个新线程，向 Stage.shuffleDep.getMergerLocs 的所有机器发送 FinalizeShuffleMerge 消息
+   * 如果 registerMergeResults = true，会继续生成 RegisterMergeStatuses 对象
+   *
    * DAGScheduler notifies all the remote shuffle services chosen to serve shuffle merge request for
    * the given shuffle map stage to finalize the shuffle merge process for this shuffle. This is
    * invoked in a separate thread to reduce the impact on the DAGScheduler main thread, as the

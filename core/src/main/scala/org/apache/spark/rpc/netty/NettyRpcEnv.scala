@@ -355,6 +355,15 @@ private[netty] class NettyRpcEnv(
 
   override def fileServer: RpcEnvFileServer = streamManager
 
+  /**
+   * Pipe 用法:
+   * 1. Producer and consumer decouping
+   * 2. Even one consumer can consume a group of producers
+   * 3. wirte data with sink, and read data with source.
+   *
+   * FileDownloadChannel.read(dst: ByteBuffer): read data from Pipe to ByteBuffer
+   *
+   */
   override def openChannel(uri: String): ReadableByteChannel = {
     val parsedUri = new URI(uri)
     require(parsedUri.getHost() != null, "Host name must be defined.")
@@ -364,7 +373,9 @@ private[netty] class NettyRpcEnv(
     val pipe = Pipe.open()
     val source = new FileDownloadChannel(pipe.source())
     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {
+      // 1. create a remote connection to host:port
       val client = downloadClient(parsedUri.getHost(), parsedUri.getPort())
+      // FileDownloadCallback.onData() -- write data into pipe.sink()
       val callback = new FileDownloadCallback(pipe.sink(), source, client)
       client.stream(parsedUri.getPath(), callback)
     })(catchBlock = {

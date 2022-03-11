@@ -80,6 +80,7 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
                 s" for stage ${context.stageId()} with shuffle ID ${dep.shuffleId}")
               logDebug(s"Starting pushing blocks for the task ${context.taskAttemptId()}")
               val dataFile = resolver.getDataFile(dep.shuffleId, mapId)
+              // 这里开始 push shuffle结果到 merger
               new ShuffleBlockPusher(SparkEnv.get.conf)
                 .initiateBlockPush(dataFile, writer.getPartitionLengths(), dep, partition.index)
             case _ =>

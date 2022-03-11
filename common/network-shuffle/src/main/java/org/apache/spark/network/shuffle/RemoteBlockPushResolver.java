@@ -274,6 +274,9 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
     return new MergedBlockMeta(numChunks, chunkBitMaps);
   }
 
+  /**
+   * 这里真正读取 Merged 数据
+   */
   @SuppressWarnings("UnstableApiUsage")
   @Override
   public ManagedBuffer getMergedBlockData(
@@ -393,6 +396,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         BlockPushNonFatalFailure.getErrorMsg(streamId, ReturnCode.TOO_OLD_ATTEMPT_PUSH));
     }
     // Retrieve merged shuffle file metadata
+    // 这里获取 AppShufflePartitionInfo 要做一些check，check 不通过会返回 null
+    // 除了 shuffleId 和 reduceId 之外，shuffleMergeId 用于判断当前请求是否是 stale or is new stage attempt
     AppShufflePartitionInfo partitionInfoBeforeCheck;
     BlockPushNonFatalFailure failure = null;
     try {
@@ -491,6 +496,9 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
     }
   }
 
+  /**
+   * @return MergeStatuses
+   */
   @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
   @Override
   public MergeStatuses finalizeShuffleMerge(FinalizeShuffleMerge msg) {
@@ -539,6 +547,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
       // sent to the driver will be empty. This cam happen when the service didn't receive any
       // blocks for the shuffle yet and the driver didn't wait for enough time to finalize the
       // shuffle.
+      // 这里通过设置 appShuffleInfo.shuffles(shuffleId) = new AppShuffleMergePartitionsInfo(msg.shuffleMergeId, true)
+      // 来终止后续的 PushBlock 请求
       return new AppShuffleMergePartitionsInfo(msg.shuffleMergeId, true);
     });
     Map<Integer, AppShufflePartitionInfo> shuffleMergePartitions = shuffleMergePartitionsRef.get();
@@ -548,6 +558,16 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         new MergeStatuses(msg.shuffleId, msg.shuffleMergeId,
           new RoaringBitmap[0], new int[0], new long[0]);
     } else {
+      /**
+       * 返回结果 MergeStatuses, 这个方法中 partition代表对应的reduce，
+       * partition.mapTracker 代表map的BitMap，用于校验map之后的数据是否已经存在
+       * int shuffleId,
+       * int shuffleMergeId,
+       * RoaringBitmap[] bitmaps,
+       * int[] reduceIds: r0  r1  r2  r3
+       * long[]   sizes:  5   8   9   11
+       *
+       */
       List<RoaringBitmap> bitmaps = new ArrayList<>(shuffleMergePartitions.size());
       List<Integer> reduceIds = new ArrayList<>(shuffleMergePartitions.size());
       List<Long> sizes = new ArrayList<>(shuffleMergePartitions.size());
@@ -656,6 +676,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
   }
 
   /**
+   * In onData() method, Write Push Block data through interceptor
    * Callback for push stream that handles blocks which are not already merged.
    */
   static class PushBlockStreamCallback implements StreamCallbackWithID {
@@ -930,6 +951,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
           }
           long updatedPos = partitionInfo.getDataFilePos() + length;
           boolean indexUpdated = false;
+          // TODO 如果 updatedPos - partitionInfo.getLastChunkOffset() < mergeManager.minChunkSize 这里不会丢失 mapIndex 的Meta信息吗？
           if (updatedPos - partitionInfo.getLastChunkOffset() >= mergeManager.minChunkSize) {
             try {
               partitionInfo.updateChunkInfo(updatedPos, mapIndex);
@@ -993,6 +1015,16 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
   }
 
   /**
+   * AppShuffleMergePartitionsInfo
+   * reduceId -> ASPI_1 : $MERGED_SHUFFLE_FILE_NAME_PREFIX_$appId_$shuffleId_$shuffleMergeId_$reduceId.data
+   * R2 -> ASPI_2
+   * R3 -> ASPI_3
+   *
+   *      Map_1   Map_2   Map_3
+   * R1   5       6       7     --> AppShufflePartitionInfo
+   * R2   2       3       4
+   */
+  /**
    * Wrapper class to hold merged Shuffle related information for a specific shuffleMergeId
    * required for the shuffles of indeterminate stages.
    */
@@ -1020,6 +1052,16 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
     }
   }
 
+  /**
+   * MergeShuffleFile:
+   *    chunk_1 Offset
+   *    chunk_2 Offset
+   *    ...
+   *    chunk_n Offset
+   *
+   * mapTracker: m0, m1, m2 .... m(n)
+   * chunkTracker: only for current chunk
+   */
   /** Metadata tracked for an actively merged shuffle partition */
   public static class AppShufflePartitionInfo {
 

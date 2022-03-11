@@ -757,6 +757,14 @@ class BlockManagerMasterEndpoint(
     }
   }
 
+  /**
+   * PushMergerLocations
+   * 算法:
+   * 1. if (filteredMergersWithExecutors.size >= numMergersNeeded) 返回全部
+   * 2. 如果不够的话，返回一部分
+   * 3. 这里传入的 numMergersNeeded = numPartitions / tasksPerExecutor，偏大的，所以不满足也没关系
+   *    @YarnSchedulerBackend.getShufflePushMergerLocations()
+   */
   private def getShufflePushMergerLocations(
       numMergersNeeded: Int,
       hostsToFilter: Set[String]): Seq[BlockManagerId] = {

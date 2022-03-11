@@ -153,6 +153,25 @@ public class TransportClient implements Closeable {
 
   /**
    * Request to stream the data with the given stream ID from the remote end.
+   * 1. 根据 streamId 封装 StreamRequest
+   * 2. 通过 channel 发送 StreamRequest 到 remote end
+   * 3. 将 Pair<streamId, callback> 注册到 TransportResponseHandler handler 中
+   * 4. 当 TransportResponseHandler 收到的message 是 StreamResponse 类型时
+   *
+   * 发送请求过程
+   * openChannel(uri: String)
+   * client.stream(OneForOneStreamManager.genStreamChunkId(streamHandle.streamId, i), new DownloadCallback(i));
+   *    handler.addStreamCallback(streamId, callback);  // 顺序添加回调 Callback(这里必须保证response必须安装request的顺序进行响应)
+   *    channel.writeAndFlush(new StreamRequest(streamId)).addListener(listener); // 发送 StreamRequest 请求
+   *
+   * # 数据接收过程 Handle StreamResponse
+   * TransportResponseHandler
+   *    StreamInterceptor.handle(ByteBuf buf)
+   *        callback.onData(streamId, nioBuffer)
+   *            --> Pipe.sink
+   *    当interceptor 读了 resp.byteCount 数据后，关闭
+   *        callback.complete()
+   *            --> sink.close()
    *
    * @param streamId The stream to fetch.
    * @param callback Object to call with the stream data.

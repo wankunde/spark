@@ -146,6 +146,10 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
   }
 
   /**
+   * 1. 在 prepareBlockPushRequests() 方法中准备好 PushRequest 请求
+   * 2. pushRequests 经过处理后放入 deferredPushRequests
+   * 3. 调用 sendRequest(request) 发送 Push请求
+   *
    * Since multiple block push threads could potentially be calling pushUpToMax for the same
    * mapper, we synchronize access to this method so that only one thread can push blocks for
    * a given mapper. This helps to simplify access to the shared states. The down side of this
@@ -158,6 +162,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
   private def pushUpToMax(): Unit = synchronized {
     // Process any outstanding deferred push requests if possible.
     if (deferredPushRequests.nonEmpty) {
+      // 这里 remoteAddress 都是来自 shuffleDep.mergerLocs 属性
       for ((remoteAddress, defReqQueue) <- deferredPushRequests) {
         while (isRemoteBlockPushable(defReqQueue) &&
           !isRemoteAddressMaxedOut(remoteAddress, defReqQueue.front)) {

@@ -133,6 +133,14 @@ public class OneForOneBlockFetcher {
     }
   }
 
+  /**
+   * BlockId格式:
+   *   SHUFFLE_CHUNK_SPLIT
+   *   shuffleId
+   *   mapId
+   *   reduceId
+   *   [end_reduceId]
+   */
   private AbstractFetchShuffleBlocks createFetchShuffleBlocksMsg(
       String appId,
       String execId,
@@ -169,6 +177,21 @@ public class OneForOneBlockFetcher {
       appId, execId, shuffleId, mapIds, reduceIdsArray, batchFetchEnabled);
   }
 
+  /**
+   * BlockId格式:
+   *   SHUFFLE_CHUNK_SPLIT
+   *   shuffleId
+   *   shuffleMergeId
+   *   reduceId
+   *   BlocksInfo:
+   *     ids: 对于 ShuffleChunks 来说就是 m1, m2, m3,.. 这里叫做 chunkIds
+   *
+   * Return: FetchShuffleBlockChunks(
+   *    appId, execId, shuffleId,shuffleMergeId,
+   *    reduceIds,
+   *    chunkIdsArray   // 二位数组，第一维是 reduceId, 第二维是 chunkIds
+   * )
+   */
   private AbstractFetchShuffleBlocks createFetchShuffleChunksMsg(
       String appId,
       String execId,
@@ -275,6 +298,13 @@ public class OneForOneBlockFetcher {
   }
 
   /**
+   * 1. DownloadFileManager --> 获取读数据的时候先创建一个临时文件
+   * 2. DownloadCallback --> 负责对该临时文件的写入，写完后进行注册，写失败的清理
+   *    使用 DownloadCallback 方式获取到的临时文件会被包装成 FileSegmentManagedBuffer 对象，回调进行注册
+   * 3. 如果 DownloadFileManager 非空，调用上面的 callback, chunk by chunk read and write into temp file.
+   * 4. client.fetchChunk() 方法太无语了，传入一个chunkCallback 内部啥都不做，直接调用
+   *   OneForOneBlockFetcher.listener() 来消费 chunk 数据，参考构造方法
+   * 5. Server 消息处理 @ExternalBlockHandler.handleMessage()
    * Begins the fetching process, calling the listener with every block fetched.
    * The given message will be serialized with the Java serializer, and the RPC must return a
    * {@link StreamHandle}. We will send all fetch requests immediately, without throttling.

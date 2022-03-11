@@ -131,12 +131,25 @@ public class ExternalBlockHandler extends RpcHandler
     if (msgObj instanceof PushBlockStream) {
       PushBlockStream message = (PushBlockStream) msgObj;
       checkAuth(client, message.appId);
+      // 这里接收 push 过来的Block数据，并Merge Map结果
       return mergeManager.receiveBlockDataAsStream(message);
     } else {
       throw new UnsupportedOperationException("Unexpected message with #receiveStream: " + msgObj);
     }
   }
 
+  /**
+   * 处理消息类型:
+   * AbstractFetchShuffleBlocks
+   *    FetchShuffleBlockChunks: RemoteBlockPushResolver.getMergedBlockData() 读取数据，再通过 ShuffleChunkManagedBufferIterator 以流的方式返回结果
+   *    FetchShuffleBlocks
+   * OpenBlocks
+   * RegisterExecutor
+   * RemoveBlocks
+   * GetLocalDirsForExecutors
+   * FinalizeShuffleMerge <-- DAGScheduler 合并 PushedBlocks
+   * DiagnoseCorruption
+   */
   protected void handleMessage(
       BlockTransferMessage msgObj,
       TransportClient client,

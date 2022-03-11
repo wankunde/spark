@@ -106,6 +106,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     if (request instanceof ChunkFetchRequest) {
       chunkFetchRequestHandler.processFetchRequest(channel, (ChunkFetchRequest) request);
     } else if (request instanceof RpcRequest) {
+      // 这里调用 ExternalBlockHandler.handleMessage() 处理多种消息类型请求
       processRpcRequest((RpcRequest) request);
     } else if (request instanceof OneWayMessage) {
       processOneWayMessage((OneWayMessage) request);
@@ -114,6 +115,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     } else if (request instanceof UploadStream) {
       processStreamUpload((UploadStream) request);
     } else if (request instanceof MergedBlockMetaRequest) {
+      // 这里调用 ExternalBlockHandler.receiveMergeBlockMetaReq() 处理请求
       processMergedBlockMetaRequest((MergedBlockMetaRequest) request);
     } else {
       throw new IllegalArgumentException("Unknown request type: " + request);
