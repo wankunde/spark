@@ -625,7 +625,7 @@ case class HashAggregateExec(
     // create grouping key
     val unsafeRowKeyCode = GenerateUnsafeProjection.createCode(
       ctx, bindReferences[Expression](groupingExpressions, child.output))
-    val fastRowKeys = ctx.generateExpressions(
+    val (fastRowKeys, initBlock) = ctx.generateExpressions(
       bindReferences[Expression](groupingExpressions, child.output))
     val unsafeRowKeys = unsafeRowKeyCode.value
     val unsafeRowKeyHash = ctx.freshName("unsafeRowKeyHash")
@@ -688,6 +688,7 @@ case class HashAggregateExec(
         // If fast hash map is on, we first generate code to probe and update the fast hash map.
         // If the probe is successful the corresponding fast row buffer will hold the mutable row.
         s"""
+           |$initBlock
            |${fastRowKeys.map(_.code).mkString("\n")}
            |if (${fastRowKeys.map("!" + _.isNull).mkString(" && ")}) {
            |  $fastRowBuffer = $fastHashMapTerm.findOrInsert(
