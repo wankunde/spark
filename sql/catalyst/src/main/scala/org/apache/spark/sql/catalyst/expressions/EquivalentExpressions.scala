@@ -132,7 +132,9 @@ class EquivalentExpressions {
   def addExprTree(
       expr: Expression,
       map: mutable.HashMap[ExpressionEquals, ExpressionStats] = equivalenceMap): Unit = {
-    updateExprTree(expr, map)
+    if (supportedExpression(expr)) {
+      updateExprTree(expr, map)
+    }
   }
 
   private def updateExprTree(
@@ -159,7 +161,11 @@ class EquivalentExpressions {
    * equivalent expressions.
    */
   def getExprState(e: Expression): Option[ExpressionStats] = {
-    equivalenceMap.get(ExpressionEquals(e))
+    if (supportedExpression(e)) {
+      equivalenceMap.get(ExpressionEquals(e))
+    } else {
+      None
+    }
   }
 
   // Exposed for testing.
