@@ -125,23 +125,6 @@ class EquivalentExpressions {
     }
   }
 
-  // There are some special expressions that we should not recurse into all of its children.
-  //   1. CodegenFallback: it's children will not be used to generate code (call eval() instead)
-  //   2. ConditionalExpression: use its children that will always be evaluated.
-  private def childrenToRecurse(expr: Expression): Seq[Expression] = expr match {
-    case _: CodegenFallback => Nil
-    case c: ConditionalExpression => c.alwaysEvaluatedInputs
-    case other => other.children
-  }
-
-  // For some special expressions we cannot just recurse into all of its children, but we can
-  // recursively add the common expressions shared between all of its children.
-  private def commonChildrenToRecurse(expr: Expression): Seq[Seq[Expression]] = expr match {
-    case _: CodegenFallback => Nil
-    case c: ConditionalExpression => c.branchGroups
-    case _ => Nil
-  }
-
   /**
    * Adds the expression to this data structure recursively. Stops if a matching expression
    * is found. That is, if `expr` has already been added, its children are not added.
