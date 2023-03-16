@@ -1231,8 +1231,6 @@ class CodegenContext extends Logging {
         val initialized = addMutableState(JAVA_BOOLEAN, "subExprInit")
         initBlock += code"$initialized = false;\n"
         val wrapperFunc: ExprCode => ExprCode = { eval =>
-          // Generate the code for this expression tree and wrap it in a function.
-          val fnName = freshName("subExpr")
           val (inputVars, exprCodes) = {
             val (inputVars, exprCodes) = getLocalInputVariableValues(this, expr)
             (inputVars.toSeq, exprCodes.toSeq)
@@ -1248,21 +1246,34 @@ class CodegenContext extends Logging {
             (eval.isNull, "")
           }
           val value = addMutableState(javaType(expr.dataType), "subExprValue")
-          val argList =
-            inputVars.map(v => s"${CodeGenerator.typeName(v.javaType)} ${v.variableName}")
-          val fn =
-            s"""
-               |private void $fnName(${argList.mkString(", ")}) {
-               |  if (!$initialized) {
-               |    ${eval.code}
-               |    $initialized = true;
-               |    $isNullEvalCode
-               |    $value = ${eval.value};
-               |  }
-               |}
-             """.stripMargin
-          val inputVariables = inputVars.map(_.variableName).mkString(", ")
-          val code = code"${addNewFunction(fnName, fn)}($inputVariables);"
+          val code = if (isValidParamLength(calculateParamLengthFromExprValues(inputVars))) {
+            // Generate the code for this expression tree and wrap it in a function.
+            val fnName = freshName("subExpr")
+            val argList =
+              inputVars.map(v => s"${CodeGenerator.typeName(v.javaType)} ${v.variableName}")
+            val fn =
+              s"""
+                 |private void $fnName(${argList.mkString(", ")}) {
+                 |  if (!$initialized) {
+                 |    ${eval.code}
+                 |    $initialized = true;
+                 |    $isNullEvalCode
+                 |    $value = ${eval.value};
+                 |  }
+                 |}
+                 """.stripMargin
+            val inputVariables = inputVars.map(_.variableName).mkString(", ")
+            code"${addNewFunction(fnName, fn)}($inputVariables);"
+          } else {
+            code"""
+                  |if (!$initialized) {
+                  |  ${eval.code}
+                  |  $initialized = true;
+                  |  $isNullEvalCode
+                  |  $value = ${eval.value};
+                  |}
+               """.stripMargin
+          }
           ExprCode(code, isNull, JavaCode.global(value, expr.dataType))
         }
         ExpressionEquals(expr) -> (stats.useCount, wrapperFunc, None)
