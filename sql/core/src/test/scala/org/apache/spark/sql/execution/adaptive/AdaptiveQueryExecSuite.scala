@@ -2841,6 +2841,26 @@ class AdaptiveQueryExecSuite
       }
     }
   }
+
+  test("WindowGroupLimit PushDown case") {
+    withSQLConf(
+      SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
+      SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key -> "-1") {
+      withTable("t1", "t2") {
+        sql(
+          s"""SELECT *
+             |FROM (
+             |  SELECT *, ROW_NUMBER() OVER(PARTITION BY a ORDER BY c ASC) rn
+             |  FROM VALUES(1, 1, 1), (1, 1, null), (2, 2, 2), (2, 2, 2), (3, 3, 3), (null, 4, 4) t1(a, b, c)
+             |  LEFT JOIN VALUES(1, 1, 1), (1, 1, null), (2, 2, 2), (2, 2, 2), (3, 3, 3), (null, 4, 4) t2(x, y, z)
+             |  ON a = x AND b is not null AND y is not null
+             |  WHERE z is null ) t
+             |WHERE rn = 1
+             |""".stripMargin).show()
+        Thread.sleep(10000000)
+      }
+    }
+  }
 }
 
 /**
